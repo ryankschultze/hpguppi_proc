@@ -12,8 +12,8 @@ CUDA_LIBDIR ?= $(CUDA_DIR)/lib
 endif
 
 #Don't install in /usr/local yet
-bflibdir ?= /home/mruzinda/hpguppi_proc/coherent_beamformer/lib
-bfincludedir ?= /home/mruzinda/hpguppi_proc/coherent_beamformer/include
+bflibdir ?= /home/mruzinda/hpguppi_proc/lib
+bfincludedir ?= /home/mruzinda/hpguppi_proc/include
 
 #On blc03 with NVIDIA A5000
 CUDA_ARCH ?= "-gencode=arch=compute_80,code=sm_80"
