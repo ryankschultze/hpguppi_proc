@@ -8,7 +8,7 @@
 #     output - (optional)
 #
 
-hpguppi_plugin=../src/.libs/hpguppi_daq.so
+hpguppi_plugin=../src/.libs/hpguppi_proc.so
 
 #Supported modes
 if [ "$1" = 'readonly' ]
@@ -22,7 +22,15 @@ then
         echo Exiting...
         exit
     else
-        basefile=$2
+        # Path to file in first argument of execution
+        path_to_raw_files=$2
+
+        # Finds the first RAW file in the directory (which has file number before the file extension "0000.raw")
+        first_file=$(find $path_to_raw_files -type f -iname "*0000.raw")
+
+        # Removes everything after the first period in the RAW file name
+        basefile=${first_file%%.*}
+        #basefile=$2
         outdir=${basefile}
         shift
     fi
@@ -46,7 +54,15 @@ then
         echo Exiting...
         exit
     else
-        basefile=$2
+        # Path to file in first argument of execution
+        path_to_raw_files=$2
+
+        # Finds the first RAW file in the directory (which has file number before the file extension "0000.raw")
+        first_file=$(find $path_to_raw_files -type f -iname "*0000.raw")
+
+        # Removes everything after the first period in the RAW file name
+        basefile=${first_file%%.*}
+        #basefile=$2
         outdir=$3
         shift
     fi
@@ -57,12 +73,12 @@ else
 fi
 
 #-------------------------------------------
-echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_daq} $net_thread $out_thread \
+echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
  -o BASEFILE=${basefile} \
  -o OUTDIR=${outdir}
 
 
-hashpipe -p ${hpguppi_plugin:-hpguppi_daq} $net_thread $out_thread \
+hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
  -o BASEFILE=${basefile} \
  -o OUTDIR=${outdir}
 
