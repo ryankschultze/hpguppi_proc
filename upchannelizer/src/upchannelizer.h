@@ -34,10 +34,10 @@
 // For cuFFT
 #define BATCHES(Nf)     Nf*N_POL*N_ANT
 #define N_POINT(Nt)     Nt/N_TIME_STI
-#define istride(Nf,Nw)  Nf*Nw*N_POL*N_ANT
-#define idist           1
-#define ostride(Nw)     Nw*N_POL*N_ANT
-#define odist           1   
+#define ISTRIDE(Nf,Nw)  Nf*Nw*N_POL*N_ANT
+#define IDIST           1
+#define OSTRIDE(Nw)     Nw*N_POL*N_ANT
+#define ODIST           1   
 
 #ifndef min
 #define min(a,b) ((a < b) ? a : b)

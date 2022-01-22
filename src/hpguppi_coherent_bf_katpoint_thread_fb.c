@@ -1,7 +1,6 @@
-/* hpguppi_coherent_bf_thread_fb.c
- *
- * Reads HDF5 files containing phase solutions for phasing up, delays and rates for forming
- * beams, and other useful metadata.
+/* hpguppi_coherent_bf_katpoint_thread_fb.c
+ * 
+ * Gets delays using named pipe in conjuction with python script that utilizes katpoint library.
  * Perform coherent beamforming and write databuf blocks out to filterbank files on disk.
  */
 
@@ -142,10 +141,8 @@ static void *run(hashpipe_thread_args_t * args)
   double obsbw;
   double tbin;
   double obsfreq;
-  char fb_basefilename[200];
-  char hdf5_basefilename[200];
+  char basefilename[200];
   char outdir[200];
-  char bfrdir[200];
   char character = '/';
   char *char_offset; 
   long int slash_pos;
@@ -215,43 +212,8 @@ static void *run(hashpipe_thread_args_t * args)
   // n_calc_blks is the duration of the delay polynomial calculation e.g. 128 blocks is approx. 5 seconds
   // Currently, n_update_blks should not exceed 481 ms as stated by FBFUSE which is approximately 12 blocks
   int n_calc_blks = 128; // Number of blocks to calculate delay polynomials
-  double update_time = 1; // Number of seconds to update coefficients with new delay polynomial and change in time
-  double blk_time = 0; // Time in seconds per block
-  long int n_update_blks = 0; // Number of blocks to update coefficients with new epoch
-
-  char cur_fname[200] = {0};
-  char tmp_fname[200] = {0};
-  char indir[200] = {0};
-  strcpy(tmp_fname, "tmp_fname"); // Initialize as different string that cur_fname
-
-  hid_t file_id, cal_all_id, delays_id, rates_id, time_array_id, sid1, sid2, sid3, sid4; // identifiers //
-  herr_t status, cal_all_elements, delays_elements, rates_elements, time_array_elements;
-
-  typedef struct complex_t{
-    float re;
-    float im;
-  }complex_t;
-
-  hid_t reim_tid;
-  reim_tid = H5Tcreate(H5T_COMPOUND, sizeof(complex_t));
-  H5Tinsert(reim_tid, "r", HOFFSET(complex_t, re), H5T_IEEE_F32LE);
-  H5Tinsert(reim_tid, "i", HOFFSET(complex_t, im), H5T_IEEE_F32LE);
-
-  complex_t *cal_all_data;
-  double *delays_data;
-  double *rates_data;
-  double *time_array_data;
-
-  int Nant = 61;    // Number of antennas
-  int Nbeams = 61;  // Number of beams
-  int Ntimes = 300; // Number of time stamps
-  int Npol = 2;     // Number of polarizations
-  int a = 34; // Antenna index
-  int b = 1;  // Beam index
-  int t = 1;  // Time stamp index
-  int p = 1;  // Polarization index
-  int c = 223;// Coarse channel index
-
+  int n_update_blks = 3; // Number of blocks to update coefficients with new epoch
+  
   float* bf_coefficients; // Beamformer coefficients
   float* tmp_coefficients; // Temporary coefficients
   //float* telstate_phase[N_PHASE*N_FREQ]; // Telstate phase solutions
@@ -327,7 +289,7 @@ static void *run(hashpipe_thread_args_t * args)
     hgetu8(ptr, "SYNCTIME", &synctime);
     hgetu8(ptr, "HCLOCKS", &hclocks);
     hgetu4(ptr, "FENCHAN", &fenchan);
-    hgetr8(ptr, "CHAN_BW", &chan_bw); // In MHz
+    hgetr8(ptr, "CHAN_BW", &chan_bw);
     hgetr8(ptr, "OBSFREQ", &obsfreq);
     hgetu8(ptr, "NANTS", &nants);
     hgetu8(ptr, "BLOCSIZE", &blksize); // Raw file block size
@@ -339,11 +301,8 @@ static void *run(hashpipe_thread_args_t * args)
 
       // Number of time samples per block in a RAW file
       nt = (int)(blksize/(2*obsnchan*npol));
-      
-      // Time in seconds per block
-      blk_time = nt/(chan_bw*1e6);
 
-      printf("CBF: Got center frequency, obsfreq = %lf MHz, n. time samples = %d, and number of blocks to update = %ld \n", obsfreq, nt, n_update_blks);
+      printf("CBF: Got center frequency, obsfreq = %lf MHz and n. time samples = %d \n", obsfreq, nt);
 
       // Calculate coarse channel center frequencies depending on the mode and center frequency that spans the RAW file
       coarse_chan_band = full_bw/fenchan;
@@ -357,110 +316,62 @@ static void *run(hashpipe_thread_args_t * args)
       for(int i=(n_chan_per_node/2); i<n_chan_per_node; i++){
         coarse_chan_freq[i] = ((i+1)-(n_chan_per_node/2))*coarse_chan_band + (obsfreq*1e6);
       }
-    }
-    
-    // Get the appropriate basefile name from the rawfile_input_thread 
-    // Get HDF5 file data at the beginning of the processing
-    if(filenum == 0 && block_count == 0){
-      hashpipe_status_lock_safe(st);
-      hgets(st->buf, "BASEFILE", sizeof(raw_basefilename), raw_basefilename);
-      hgets(st->buf, "OUTDIR", sizeof(outdir), outdir);
-      hgets(st->buf, "BFRDIR", sizeof(bfrdir), bfrdir);
-      hashpipe_status_unlock_safe(st);
-      printf("CBF: RAW file base filename from command: %s and outdir is: %s \n", raw_basefilename, outdir);
-      printf("CBF: bfrdir is: %s \n", bfrdir);
 
-      // Get filterbank file path
-      // strrchr() finds the last occurence of the specified character
-      char_offset = strrchr(raw_basefilename, character);
-      slash_pos = char_offset-raw_basefilename;
-      printf("CBF: The last position of %c is %ld \n", character, slash_pos);
+      // Check Redis for phase solution by comparing timestamp there with timestamp calculated with synctime from raw file
+      // Make sure the timestamp is converted to the mjd format used in the hpguppi_meerkat_spead_thread.c script
+      //n_telstate_phase = N_PHASE*n_chan_per_node;
 
-      // Get file name with no path
-      memcpy(new_base, &raw_basefilename[slash_pos+1], sizeof(raw_basefilename)-slash_pos);
-      printf("CBF: File name with no path: %s \n", new_base);
+      // Get the phase solutions and possibly copy the values to the telstate_phase array.
+      // Update by comparing the timestamps
 
-      // Set specified path to write filterbank files
-      strcpy(fb_basefilename, outdir);
-      strcat(fb_basefilename, "/");
-      strcat(fb_basefilename, new_base);
-      printf("CBF: Filterbank file name with new path: %s \n", fb_basefilename);
+      // Write to new FIFO going to get_delays module for delay polynomial calculation
+      // Creating the named file(FIFO)
+      // mkfifo(<pathname>,<permission>)
+      mkfifo(myfifo_c, 0666);
 
-      // Set specified path to read from HDF5 files
-      strcpy(hdf5_basefilename, bfrdir);
-      strcat(hdf5_basefilename, "/");
-      strcat(hdf5_basefilename, new_base);
-      strcat(hdf5_basefilename, ".bfr5");
-      printf("CBF: HDF5 file name with path: %s \n", hdf5_basefilename);
+      while(access(myfifo_c, F_OK) == 0){
+        // If the FIFO has been deleted/removed by the get_delays module,
+        // then that means it has been read and we can go retrieve the delay polynomials
+        if(access(myfifo_c, F_OK) != 0){
+          printf("CBF: FIFO used to write center frequency to get_delays module was deleted...\n");
+          break;
+        }
 
-      // Read cal_all once per HDF5 file. It doesn't change through out the entire recording.
-      // Read delayinfo once, get all values, and update when required
+        // Open file as a read/write
+        fdc = open(myfifo_c,O_RDWR);
+        if(fdc == -1){
+          printf("CBF: Unable to open fifo_c file...\n");
+          break;
+        }
 
-      // Need to initialize these obsid variables
-      // Figure out how to read them first
-      if(raw_obsid == hdf5_obsid){
-      // Read HDF5 file and get all necessary parameters (cal_all, delays, rates, time_array)
-      // Open an existing file. //
-      file_id = H5Fopen(cur_fname, H5F_ACC_RDONLY, H5P_DEFAULT);
+        //printf("CBF: After open(myfifo_c)...\n");
 
-      // Open an existing dataset. //
-      cal_all_id = H5Dopen(file_id, "/calinfo/cal_all", H5P_DEFAULT);
-      delays_id = H5Dopen(file_id, "/delayinfo/delays", H5P_DEFAULT);
-      rates_id = H5Dopen(file_id, "/delayinfo/rates", H5P_DEFAULT);
-      time_array_id = H5Dopen(file_id, "/delayinfo/time_array", H5P_DEFAULT);
+        // Write to file
+        wvalc = write(fdc, &obsfreq, sizeof(obsfreq));
+        if(wvalc != 0){
+          printf("CBF: Written to obsfreq FIFO!\n");
+        }
 
-      // Get dataspace ID //
-      sid1 =  H5Dget_space(cal_all_id);
-      sid2 =  H5Dget_space(delays_id);
-      sid3 =  H5Dget_space(rates_id);
-      sid4 =  H5Dget_space(time_array_id);
-  
-      // Gets the number of elements in the data set //
-      cal_all_elements=H5Sget_simple_extent_npoints(sid1);
-      delays_elements=H5Sget_simple_extent_npoints(sid2);
-      rates_elements=H5Sget_simple_extent_npoints(sid3);
-      time_array_elements=H5Sget_simple_extent_npoints(sid4);
-      printf("Number of elements in the cal_all dataset is : %d\n", cal_all_elements);
-      printf("Number of elements in the delays dataset is : %d\n", delays_elements);
-      printf("Number of elements in the rates dataset is : %d\n", rates_elements);
-      printf("Number of elements in the time_array dataset is : %d\n", time_array_elements);
+        //printf("CBF: After write(myfifo_c)...\n");
 
-      // Allocate memory for array
-      cal_all_data = malloc((int)cal_all_elements*sizeof(complex_t));
-      delays_data = malloc((int)delays_elements*sizeof(double));
-      rates_data = malloc((int)rates_elements*sizeof(double));
-      time_array_data = malloc((int)time_array_elements*sizeof(double));
-
-      // Read the dataset. //
-      status = H5Dread(cal_all_id, reim_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, cal_all_data);
-      printf("cal_all_data[%d].re = %f \n", a + Nant*p + Npol*Nant*c, cal_all_data[a + Nant*p + Npol*Nant*c].re);
-
-      status = H5Dread(delays_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, delays_data);
-      printf("delays_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, delays_data[a + Nant*b + Nbeams*Nant*t]);
-
-      status = H5Dread(rates_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, rates_data);
-      printf("rates_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, rates_data[a + Nant*b + Nbeams*Nant*t]);
-
-      status = H5Dread(time_array_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, time_array_data);
-      printf("time_array_data[0] = %lf \n", time_array_data[0]);
-
-      // Close the dataset. //
-      status = H5Dclose(cal_all_id);
-      status = H5Dclose(delays_id);
-      status = H5Dclose(rates_id);
-      status = H5Dclose(time_array_id);
-
-      // Close the file. //
-      status = H5Fclose(file_id);
+        // Close file
+        close(fdc);
       }
     }
 
-    // Number of blocks to update coefficients with delay polynomials and time difference
-    n_update_blks = lround(update_time/blk_time);
-
     if(sim_flag == 0){
       // Update coefficients every specified number of blocks
-      if(block_count%n_update_blks == 0){
+      if(block_count%n_calc_blks == 0){
+
+/*
+        printf("CBF: synctime: %lu\n", synctime);
+        printf("CBF: hclocks: %lu\n", hclocks);
+        printf("CBF: fenchan: %lu\n", (unsigned long)fenchan);
+        printf("CBF: chan_bw: %lf\n", chan_bw);
+        printf("CBF: pktidx: %ld\n", pktidx);
+        printf("CBF: obsfreq (MHz): %lf\n", obsfreq);
+*/
+
         // Calc real-time seconds since SYNCTIME for pktidx:
         //
         //                        pktidx * hclocks
@@ -473,23 +384,136 @@ static void *run(hashpipe_thread_args_t * args)
 
         epoch_sec = synctime + realtime_secs;
 
+        printf("CBF: Before open(myfifo_e), epoch_sec = %lf...\n", epoch_sec);
+  
+        // Write to new FIFO going to get_delays module for delay polynomial calculation
+        // Creating the named file(FIFO)
+        // mkfifo(<pathname>,<permission>)
+        mkfifo(myfifo_e, 0666);
+
+        while(access(myfifo_e, F_OK) == 0){
+          // If the FIFO has been deleted/removed by the get_delays module,
+          // then that means it has been read and we can go retrieve the delay polynomials
+          if(access(myfifo_e, F_OK) != 0){
+            printf("CBF: FIFO used to write epoch for get_delays script was deleted...\n");
+            break;
+          }
+
+          // Open file as a read/write
+          fde = open(myfifo_e,O_RDWR);
+          if(fde == -1){
+            printf("CBF: Unable to open fifo_e file...\n");
+            break;
+          }
+
+          //printf("CBF: After open(myfifo_e)...\n");
+
+          // Write to file
+          wvale = write(fde, &epoch_sec, sizeof(epoch_sec));
+          if(wvale != 0){
+            printf("CBF: written to epoch FIFO!\n");
+          }
+
+          //printf("CBF: After write(myfifo_e)...\n");
+
+          // Close file
+          close(fde);
+        }
+
+        // Wait for this FIFO to be created by get_delays module
+        while(access(myfifo, F_OK) != 0){
+          if(access(myfifo, F_OK) == 0){
+            printf("CBF: FIFO for getting delay polynomials was created...\n");
+            break;
+          }
+        }
+
+        // Now get the newly calculated polynomials from FIFO written to by get_delays module
+        /* Periodically get delay polynomials */
+        // First check to see whether the file in /tmp used as a FIFO exists, currently called katpoint_delays and wait until it's deleted
+        // If it exists, read the delays from the FIFO then compute new beamformer coefficients -> while( access( fname, F_OK ) == 0 )
+        // If it doesn't exist then that means no new delays have been calculated so continue on with the previously calculated delays.
+        while(access(myfifo, F_OK) == 0){
+          // If the FIFO has been deleted/removed by the get_delays module,
+          // then that means it has been read and we can now generate the coefficients
+          if(access(myfifo, F_OK) != 0){
+            printf("CBF: FIFO for getting delay polynomials was deleted...\n");
+            break;
+          }
+
+          // Open file as a read only
+          //printf("CBF: Before open(myfifo)...\n");
+          fdr = open(myfifo,O_RDWR);
+          if(fdr == -1){
+            printf("CBF: Unable to open fifo file...\n");
+            break;
+          }
+
+          //printf("CBF: After open(myfifo)...\n");
+
+          // Read file
+          read_val = read(fdr, delay_pols, sizeof(delay_pols));
+          if(read_val != 0){
+            printf("CBF: Read delays \n");
+          }
+
+          // Close file
+          close(fdr);
+        }
+      }
+
+      // Update coefficients every specified number of blocks
+      if(block_count%n_update_blks == 0){
+
+        // If statement to make sure the epoch_sec calculation isn't done twice unnecessarily
+        if(block_count%n_calc_blks != 0){
+          // Calc real-time seconds since SYNCTIME for pktidx:
+          //
+          //                        pktidx * hclocks
+          //     realtime_secs = -----------------------
+          //                      2e6 * fenchan * chan_bw
+          // This is the value that will be used in the delay polynomial (t, the epoch)
+          if(fenchan * chan_bw != 0.0) {
+            realtime_secs = (pktidx * hclocks) / (2e6 * fenchan * fabs(chan_bw));
+          }
+
+          epoch_sec = synctime + realtime_secs;
+        }
+
         printf("CBF: In update coefficients if(), epoch_sec = %lf...\n", epoch_sec);
 
-        // May need to calculate difference in time between updates here to be even more precise
-        
-
-        // Update coefficients with difference between realtime_secs and previous real-time secs
+        // Update coefficients with realtime_secs
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
         tmp_coefficients = generate_coefficients(delay_pols, coarse_chan_freq, n_chan_per_node, nants, epoch_sec);
         //tmp_coefficients = generate_coefficients(delay_pols, telstate_phase, coarse_chan_freq, n_chan_per_node, nants, epoch_sec);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
-       
       }
+
     }
 
     // Get the appropriate basefile name from the rawfile_input_thread  
     if(filenum == 0 && block_count == 0){ // Check for the basefile name at the beginning of the first file in the 5 minute period
-      
+      hashpipe_status_lock_safe(st);
+      hgets(st->buf, "BASEFILE", sizeof(raw_basefilename), raw_basefilename);
+      hgets(st->buf, "OUTDIR", sizeof(outdir), outdir);
+      hashpipe_status_unlock_safe(st);
+      printf("CBF: RAW file base filename from command: %s and outdir is: %s \n", raw_basefilename, outdir);
+
+      // Get filterbank file path
+      // strrchr() finds the last occurence of the specified character
+      char_offset = strrchr(raw_basefilename, character);
+      slash_pos = char_offset-raw_basefilename;
+      printf("The last position of %c is %ld \n", character, slash_pos);
+
+      // Get file name with no path
+      memcpy(new_base, &raw_basefilename[slash_pos+1], sizeof(raw_basefilename)-slash_pos);
+      printf("File name with no path: %s \n", new_base);
+
+      // Set specified path to write filterbank files
+      strcpy(basefilename, outdir);
+      strcat(basefilename, "/");
+      strcat(basefilename, new_base);
+      printf("File name with new path: %s \n", basefilename);
     }
 
     // If packet idx is NOT within start/stop range
@@ -535,7 +559,7 @@ static void *run(hashpipe_thread_args_t * args)
       char fname[256];
       // Create the output directory if needed
       char datadir[1024];
-      strncpy(datadir, fb_basefilename, 1023);
+      strncpy(datadir, basefilename, 1023);
       char *last_slash = strrchr(datadir, '/');
       if (last_slash!=NULL && last_slash!=datadir) {
 	*last_slash = '\0';
@@ -560,9 +584,9 @@ static void *run(hashpipe_thread_args_t * args)
       printf("CBF: Opening filterbank files \n");
       for(int b = 0; b < N_BEAM; b++){
         if(b >= 0 && b < 10) {
-	  sprintf(fname, "%s.%04d-cbf0%d.fil", fb_basefilename, filenum, b);
+	  sprintf(fname, "%s.%04d-cbf0%d.fil", basefilename, filenum, b);
         }else{
-          sprintf(fname, "%s.%04d-cbf%d.fil", fb_basefilename, filenum, b);
+          sprintf(fname, "%s.%04d-cbf%d.fil", basefilename, filenum, b);
         }
         hashpipe_info(thread_name, "Opening fil file '%s'", fname);
 	  last_slash = strrchr(fname, '/');
@@ -606,9 +630,9 @@ static void *run(hashpipe_thread_args_t * args)
         for(int b = 0; b < N_BEAM; b++){
           close(fdraw[b]);
           if(b >= 0 && b < 10) {
-            sprintf(fname, "%s.%04d-cbf0%d.fil", fb_basefilename, filenum, b);
+            sprintf(fname, "%s.%04d-cbf0%d.fil", basefilename, filenum, b);
           }else{
-            sprintf(fname, "%s.%04d-cbf%d.fil", fb_basefilename, filenum, b);
+            sprintf(fname, "%s.%04d-cbf%d.fil", basefilename, filenum, b);
           }
           open_flags = O_CREAT|O_RDWR|O_SYNC;
           fprintf(stderr, "CBF: Opening next fil file '%s'\n", fname);

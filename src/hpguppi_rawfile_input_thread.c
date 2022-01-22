@@ -4,7 +4,7 @@
  * into shared memory blocks. 
  * Can specify output dir if want it different 
  * from input.
- * Author: Cherry Ng
+ * Author: Mark R. and Cherry Ng
  */
 #define MAX_HDR_SIZE (256000)
 
