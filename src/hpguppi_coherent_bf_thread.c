@@ -224,8 +224,9 @@ static void *run(hashpipe_thread_args_t * args)
   char indir[200] = {0};
   strcpy(tmp_fname, "tmp_fname"); // Initialize as different string that cur_fname
 
-  hid_t file_id, cal_all_id, delays_id, rates_id, time_array_id, sid1, sid2, sid3, sid4; // identifiers //
+  hid_t file_id, obs_id, cal_all_id, delays_id, rates_id, time_array_id, sid1, sid2, sid3, sid4, obs_type, native_obs_type; // identifiers //
   herr_t status, cal_all_elements, delays_elements, rates_elements, time_array_elements;
+  int hdf5_obsidsize = 0;
 
   typedef struct complex_t{
     float re;
@@ -393,65 +394,84 @@ static void *run(hashpipe_thread_args_t * args)
       strcat(hdf5_basefilename, ".bfr5");
       printf("CBF: HDF5 file name with path: %s \n", hdf5_basefilename);
 
-      // Read cal_all once per HDF5 file. It doesn't change through out the entire recording.
-      // Read delayinfo once, get all values, and update when required
+      // Read HDF5 file and get all necessary parameters (obsid, cal_all, delays, rates, time_array)
+      // Open an existing file. //
+      file_id = H5Fopen(hdf5_basefilename, H5F_ACC_RDONLY, H5P_DEFAULT);
+
+      // -------------Read obsid first----------------- //
+      // Open an existing dataset. //
+      obs_id = H5Dopen(file_id, "/obsinfo/obsid", H5P_DEFAULT);
+      // Get obsid data type //
+      obs_type = H5Dget_type(obs_id);
+      native_obs_type = H5Tget_native_type(obs_type, H5T_DIR_DEFAULT);
+      hdf5_obsidsize = (int)H5Tget_size(native_obs_type);
+      printf("obsid string size = %d\n", hdf5_obsidsize);
+      // Allocate memory to string array
+      char hdf5_obsid[hdf5_obsidsize+1];
+      hdf5_obsid[hdf5_obsidsize] = '\0'; // Terminate string
+      // Read the dataset. //
+      status = H5Dread(obs_id, native_obs_type, H5S_ALL, H5S_ALL, H5P_DEFAULT, hdf5_obsid);
+      printf("CBF: obsid = %s \n", hdf5_obsid);
+      // Close the dataset. //
+      status = H5Dclose(obs_id);
+      // -----------------------------------------------//
 
       // Need to initialize these obsid variables
       // Figure out how to read them first
       if(raw_obsid == hdf5_obsid){
-      // Read HDF5 file and get all necessary parameters (cal_all, delays, rates, time_array)
-      // Open an existing file. //
-      file_id = H5Fopen(cur_fname, H5F_ACC_RDONLY, H5P_DEFAULT);
+        // Read cal_all once per HDF5 file. It doesn't change through out the entire recording.
+        // Read delayinfo once, get all values, and update when required
+        // Open an existing datasets //
+        cal_all_id = H5Dopen(file_id, "/calinfo/cal_all", H5P_DEFAULT);
+        delays_id = H5Dopen(file_id, "/delayinfo/delays", H5P_DEFAULT);
+        rates_id = H5Dopen(file_id, "/delayinfo/rates", H5P_DEFAULT);
+        time_array_id = H5Dopen(file_id, "/delayinfo/time_array", H5P_DEFAULT);
 
-      // Open an existing dataset. //
-      cal_all_id = H5Dopen(file_id, "/calinfo/cal_all", H5P_DEFAULT);
-      delays_id = H5Dopen(file_id, "/delayinfo/delays", H5P_DEFAULT);
-      rates_id = H5Dopen(file_id, "/delayinfo/rates", H5P_DEFAULT);
-      time_array_id = H5Dopen(file_id, "/delayinfo/time_array", H5P_DEFAULT);
-
-      // Get dataspace ID //
-      sid1 =  H5Dget_space(cal_all_id);
-      sid2 =  H5Dget_space(delays_id);
-      sid3 =  H5Dget_space(rates_id);
-      sid4 =  H5Dget_space(time_array_id);
+        // Get dataspace ID //
+        sid1 =  H5Dget_space(cal_all_id);
+        sid2 =  H5Dget_space(delays_id);
+        sid3 =  H5Dget_space(rates_id);
+        sid4 =  H5Dget_space(time_array_id);
   
-      // Gets the number of elements in the data set //
-      cal_all_elements=H5Sget_simple_extent_npoints(sid1);
-      delays_elements=H5Sget_simple_extent_npoints(sid2);
-      rates_elements=H5Sget_simple_extent_npoints(sid3);
-      time_array_elements=H5Sget_simple_extent_npoints(sid4);
-      printf("Number of elements in the cal_all dataset is : %d\n", cal_all_elements);
-      printf("Number of elements in the delays dataset is : %d\n", delays_elements);
-      printf("Number of elements in the rates dataset is : %d\n", rates_elements);
-      printf("Number of elements in the time_array dataset is : %d\n", time_array_elements);
+        // Gets the number of elements in the data set //
+        cal_all_elements=H5Sget_simple_extent_npoints(sid1);
+        delays_elements=H5Sget_simple_extent_npoints(sid2);
+        rates_elements=H5Sget_simple_extent_npoints(sid3);
+        time_array_elements=H5Sget_simple_extent_npoints(sid4);
+        printf("CBF: Number of elements in the cal_all dataset is : %d\n", cal_all_elements);
+        printf("CBF: Number of elements in the delays dataset is : %d\n", delays_elements);
+        printf("CBF: Number of elements in the rates dataset is : %d\n", rates_elements);
+        printf("CBF: Number of elements in the time_array dataset is : %d\n", time_array_elements);
 
-      // Allocate memory for array
-      cal_all_data = malloc((int)cal_all_elements*sizeof(complex_t));
-      delays_data = malloc((int)delays_elements*sizeof(double));
-      rates_data = malloc((int)rates_elements*sizeof(double));
-      time_array_data = malloc((int)time_array_elements*sizeof(double));
+        // Allocate memory for array
+        cal_all_data = malloc((int)cal_all_elements*sizeof(complex_t));
+        delays_data = malloc((int)delays_elements*sizeof(double));
+        rates_data = malloc((int)rates_elements*sizeof(double));
+        time_array_data = malloc((int)time_array_elements*sizeof(double));
 
-      // Read the dataset. //
-      status = H5Dread(cal_all_id, reim_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, cal_all_data);
-      printf("cal_all_data[%d].re = %f \n", a + Nant*p + Npol*Nant*c, cal_all_data[a + Nant*p + Npol*Nant*c].re);
+        // Read the dataset. //
+        status = H5Dread(cal_all_id, reim_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, cal_all_data);
+        printf("CBF: cal_all_data[%d].re = %f \n", a + Nant*p + Npol*Nant*c, cal_all_data[a + Nant*p + Npol*Nant*c].re);
 
-      status = H5Dread(delays_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, delays_data);
-      printf("delays_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, delays_data[a + Nant*b + Nbeams*Nant*t]);
+        status = H5Dread(delays_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, delays_data);
+        printf("CBF: delays_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, delays_data[a + Nant*b + Nbeams*Nant*t]);
 
-      status = H5Dread(rates_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, rates_data);
-      printf("rates_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, rates_data[a + Nant*b + Nbeams*Nant*t]);
+        status = H5Dread(rates_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, rates_data);
+        printf("CBF: rates_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, rates_data[a + Nant*b + Nbeams*Nant*t]);
 
-      status = H5Dread(time_array_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, time_array_data);
-      printf("time_array_data[0] = %lf \n", time_array_data[0]);
+        status = H5Dread(time_array_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, time_array_data);
+        printf("CBF: time_array_data[0] = %lf \n", time_array_data[0]);
 
-      // Close the dataset. //
-      status = H5Dclose(cal_all_id);
-      status = H5Dclose(delays_id);
-      status = H5Dclose(rates_id);
-      status = H5Dclose(time_array_id);
+        // Close the dataset. //
+        status = H5Dclose(cal_all_id);
+        status = H5Dclose(delays_id);
+        status = H5Dclose(rates_id);
+        status = H5Dclose(time_array_id);
 
-      // Close the file. //
-      status = H5Fclose(file_id);
+        // Close the file. //
+        status = H5Fclose(file_id);
+      }else{
+        printf("CBF: OBSID in RAW file and HDF5 file do not match!\n");
       }
     }
 
