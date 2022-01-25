@@ -204,8 +204,9 @@ static void *run(hashpipe_thread_args_t * args)
     int sim_flag = 0; // Set to 1 if you'd like to use simulated data rather than the payload from the RAW file
     char * sim_data; // Initialize simulated data array
     int n_chan = 64; // Value set in coherent_beamformer_char_in.h and used with simulated data when no RAW file is read
-    int nt = 8192; 
-    sim_data = (char *)simulate_data(n_chan, nt); // Generate block of simulated data
+    int n_samp = 8192;
+    int n_pol = 2; 
+    sim_data = (char *)simulate_data(n_pol, n_chan, n_samp); // Generate block of simulated data
     ssize_t read_blocsize;
 #if TIMING
     float read_time = 0;

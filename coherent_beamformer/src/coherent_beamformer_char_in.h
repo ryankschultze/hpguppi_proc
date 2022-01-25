@@ -46,30 +46,30 @@
 // f - frequency index
 // a - antenna index
 // b - beam index
-#define data_in_idx(p, t, f, a, Nt, Nf)     (p + N_POL*t + Nt*N_POL*f + Nf*Nt*N_POL*a)
+#define data_in_idx(p, t, f, a, Np, Nt, Nf)     (p + Np*t + Nt*Np*f + Nf*Nt*Np*a)
 // Don't need an "N_REAL_INPUT" macro since the antennas are initially the slowest moving index 
-#define data_tr_idx(a, p, f, t, Nf)         (a + N_ANT*p + N_POL*N_ANT*f + Nf*N_POL*N_ANT*t)
-#define coeff_idx(a, p, b, f)               (a + N_ANT*p + N_POL*N_ANT*b + N_BEAM*N_POL*N_ANT*f)
-//#define phase_idx(a, p, f)                  (a + N_ANT*p + N_POL*N_ANT*f)
-#define delay_idx(d, a, b, Na)              (d + DELAY_POLYS*a + DELAY_POLYS*Na*b) // Should be correct indexing
-#define coh_bf_idx(p, b, f, t, Nf)          (p + N_POL*b + N_BEAM*N_POL*f + Nf*N_BEAM*N_POL*t)
-#define pow_bf_nosti_idx(b, f, t, Nf, Nt)   (f + Nf*t + Nf*Nt*b) // Changed to efficiently write each beam to a filterbank file
-#define pow_bf_idx(b, f, s, Nf, Ns)         (f + Nf*s + Nf*Ns*b) // Changed to efficiently write each beam to a filterbank file
+#define data_tr_idx(a, p, f, t, Np, Nf)         (a + N_ANT*p + Np*N_ANT*f + Nf*Np*N_ANT*t)
+#define coeff_idx(a, p, b, f, Np, Nb)           (a + N_ANT*p + Np*N_ANT*b + Nb*Np*N_ANT*f)
+//#define phase_idx(a, p, f)                      (a + N_ANT*p + N_POL*N_ANT*f)
+#define delay_idx(d, a, b, Na)                  (d + DELAY_POLYS*a + DELAY_POLYS*Na*b) // Should be correct indexing
+#define coh_bf_idx(p, b, f, t, Np, Nb, Nf)      (p + Np*b + Nb*Np*f + Nf*Nb*Np*t)
+#define pow_bf_nosti_idx(b, f, t, Nf, Nt)       (f + Nf*t + Nf*Nt*b) // Changed to efficiently write each beam to a filterbank file
+#define pow_bf_idx(b, f, s, Nf, Ns)             (f + Nf*s + Nf*Ns*b) // Changed to efficiently write each beam to a filterbank file
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 void init_beamformer(); // Allocate memory to all arrays 
 void set_to_zero(); // Set arrays to zero after a block is processed
-signed char* simulate_data(int n_chan, int nt);
-float* simulate_coefficients(int n_chan);
-float* generate_coefficients(float* tau, double* coarse_chan, int n_chan, uint64_t n_real_ant, float t);
+signed char* simulate_data(int n_pol, int n_chan, int n_samp);
+float* simulate_coefficients(int n_pol, int n_beam, int n_chan);
+float* generate_coefficients(float* tau, double* coarse_chan, int n_pol, int n_beam, int n_chan, uint64_t n_real_ant, float t);
 void input_data_pin(signed char * data_in_pin);
 void output_data_pin(float * data_out_pin);
 void coeff_pin(float * data_coeff_pin);
 void unregister_data(void * data_unregister);
 void cohbfCleanup();
-float* run_beamformer(signed char* data_in, float* coefficient, int n_chan, int nt); // Run beamformer
+float* run_beamformer(signed char* data_in, float* coefficient, int n_pol, int n_beam, int n_chan, int n_samp); // Run beamformer
 #ifdef __cplusplus
 }
 #endif

@@ -151,6 +151,7 @@ static void *run(hashpipe_thread_args_t * args)
   long int slash_pos;
   char raw_basefilename[200];
   char new_base[200];
+  char raw_obsid[200];
   //int header_size = 0;
 
   // Filterbank file header initialization
@@ -170,30 +171,9 @@ static void *run(hashpipe_thread_args_t * args)
   float time_taken_w = 0;
 
   // --------------------- Initial delay calculations with katpoint and mosaic --------------------------------//
-  // Or all calculations may be done in the while loop below
-  // File descriptor
-  int fdr;
-  int fdc;
-  int fde;
-
-  // Return value of read() function
-  int read_val;
-
-  // Return value of write() function
-  int wvale;
-  int wvalc;
 
   // Array of floats to place data read from file
   float delay_pols[N_DELAYS];
-  
-  printf("CBF: After variable and pointer initializations ...\n");
-
-  // FIFO file path
-  char * myfifo = "/tmp/katpoint_delays";
-  char * myfifo_e= "/tmp/epoch";
-  char * myfifo_c= "/tmp/obsfreq";
-
-  printf("CBF: After mkfifos...\n");
   // ------------------------------------------------------------------------------------------------//
 
   
@@ -205,8 +185,8 @@ static void *run(hashpipe_thread_args_t * args)
   uint64_t obsnchan = 0;
   uint64_t npol = 0;
   uint64_t blksize = 0; // Raw file block size
-  int nt = 0; // Number of time samples per block in a RAW file
-  int ns = 0; // Number of STI windows in output
+  int n_samp = 0; // Number of time samples per block in a RAW file
+  int n_win = 0; // Number of STI windows in output
   //int n_telstate_phase = 0;
   double realtime_secs = 0.0; // Real-time in seconds according to the RAW file metadata
   double epoch_sec = 0.0; // Epoch used for delay polynomial
@@ -224,9 +204,8 @@ static void *run(hashpipe_thread_args_t * args)
   char indir[200] = {0};
   strcpy(tmp_fname, "tmp_fname"); // Initialize as different string that cur_fname
 
-  hid_t file_id, obs_id, cal_all_id, delays_id, rates_id, time_array_id, sid1, sid2, sid3, sid4, obs_type, native_obs_type; // identifiers //
+  hid_t file_id, npol_id, nbeams_id, obs_id, cal_all_id, delays_id, rates_id, time_array_id, sid1, sid2, sid3, sid4, obs_type, native_obs_type; // identifiers //
   herr_t status, cal_all_elements, delays_elements, rates_elements, time_array_elements;
-  int hdf5_obsidsize = 0;
 
   typedef struct complex_t{
     float re;
@@ -242,6 +221,8 @@ static void *run(hashpipe_thread_args_t * args)
   double *delays_data;
   double *rates_data;
   double *time_array_data;
+  uint64_t nbeams;
+  uint64_t npol;
 
   int Nant = 61;    // Number of antennas
   int Nbeams = 61;  // Number of beams
@@ -272,7 +253,9 @@ static void *run(hashpipe_thread_args_t * args)
     //int n_chan = 16;  // 1k mode
     int n_chan = 64;  // 4k mode
     //int n_chan = 512; // 32k mode
-    tmp_coefficients = simulate_coefficients(n_chan);
+    int n_pol = 2;
+    int n_beam = 61;
+    tmp_coefficients = simulate_coefficients(n_pol, n_beam, n_chan);
     // Register the array in pinned memory to speed HtoD mem copy
     coeff_pin(tmp_coefficients);
   }
@@ -334,22 +317,28 @@ static void *run(hashpipe_thread_args_t * args)
     hgetu8(ptr, "BLOCSIZE", &blksize); // Raw file block size
     hgetu8(ptr, "OBSNCHAN", &obsnchan);
     hgetu8(ptr, "NPOL", &npol);
+    hgets(ptr, "OBSID", sizeof(raw_obsid), raw_obsid);
 
     if(filenum == next_filenum){
       next_filenum++;
 
       // Number of time samples per block in a RAW file
-      nt = (int)(blksize/(2*obsnchan*npol));
-      
-      // Time in seconds per block
-      blk_time = nt/(chan_bw*1e6);
+      n_samp = (int)(blksize/(2*obsnchan*npol));
 
-      printf("CBF: Got center frequency, obsfreq = %lf MHz, n. time samples = %d, and number of blocks to update = %ld \n", obsfreq, nt, n_update_blks);
+      // Number of STI windows
+      n_win = n_samp/N_TIME_STI;
+
+      // Time in seconds per block
+      blk_time = n_samp/(chan_bw*1e6);
+
+      printf("CBF: Got center frequency, obsfreq = %lf MHz, n. time samples = %d, and number of blocks to update = %ld \n", obsfreq, n_samp, n_update_blks);
 
       // Calculate coarse channel center frequencies depending on the mode and center frequency that spans the RAW file
       coarse_chan_band = full_bw/fenchan;
       n_chan_per_node = ((int)fenchan)/n_nodes;
-      blocksize=((N_BF_POW*n_chan_per_node)/(N_BEAM*MAX_COARSE_FREQ))*sizeof(float); // Size of beamformer output
+
+      // Size of beamformer output
+      blocksize=((N_BF_POW*n_chan_per_node*n_win)/(N_BEAM*MAX_COARSE_FREQ*N_STI))*sizeof(float); 
 
       // Skip zeroth index since the number of coarse channels is even and the center frequency is between the 2 middle channels
       for(int i=0; i<(n_chan_per_node/2); i++){
@@ -419,60 +408,75 @@ static void *run(hashpipe_thread_args_t * args)
       // Need to initialize these obsid variables
       // Figure out how to read them first
       if(raw_obsid == hdf5_obsid){
-        // Read cal_all once per HDF5 file. It doesn't change through out the entire recording.
-        // Read delayinfo once, get all values, and update when required
-        // Open an existing datasets //
-        cal_all_id = H5Dopen(file_id, "/calinfo/cal_all", H5P_DEFAULT);
-        delays_id = H5Dopen(file_id, "/delayinfo/delays", H5P_DEFAULT);
-        rates_id = H5Dopen(file_id, "/delayinfo/rates", H5P_DEFAULT);
-        time_array_id = H5Dopen(file_id, "/delayinfo/time_array", H5P_DEFAULT);
-
-        // Get dataspace ID //
-        sid1 =  H5Dget_space(cal_all_id);
-        sid2 =  H5Dget_space(delays_id);
-        sid3 =  H5Dget_space(rates_id);
-        sid4 =  H5Dget_space(time_array_id);
-  
-        // Gets the number of elements in the data set //
-        cal_all_elements=H5Sget_simple_extent_npoints(sid1);
-        delays_elements=H5Sget_simple_extent_npoints(sid2);
-        rates_elements=H5Sget_simple_extent_npoints(sid3);
-        time_array_elements=H5Sget_simple_extent_npoints(sid4);
-        printf("CBF: Number of elements in the cal_all dataset is : %d\n", cal_all_elements);
-        printf("CBF: Number of elements in the delays dataset is : %d\n", delays_elements);
-        printf("CBF: Number of elements in the rates dataset is : %d\n", rates_elements);
-        printf("CBF: Number of elements in the time_array dataset is : %d\n", time_array_elements);
-
-        // Allocate memory for array
-        cal_all_data = malloc((int)cal_all_elements*sizeof(complex_t));
-        delays_data = malloc((int)delays_elements*sizeof(double));
-        rates_data = malloc((int)rates_elements*sizeof(double));
-        time_array_data = malloc((int)time_array_elements*sizeof(double));
-
-        // Read the dataset. //
-        status = H5Dread(cal_all_id, reim_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, cal_all_data);
-        printf("CBF: cal_all_data[%d].re = %f \n", a + Nant*p + Npol*Nant*c, cal_all_data[a + Nant*p + Npol*Nant*c].re);
-
-        status = H5Dread(delays_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, delays_data);
-        printf("CBF: delays_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, delays_data[a + Nant*b + Nbeams*Nant*t]);
-
-        status = H5Dread(rates_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, rates_data);
-        printf("CBF: rates_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, rates_data[a + Nant*b + Nbeams*Nant*t]);
-
-        status = H5Dread(time_array_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, time_array_data);
-        printf("CBF: time_array_data[0] = %lf \n", time_array_data[0]);
-
-        // Close the dataset. //
-        status = H5Dclose(cal_all_id);
-        status = H5Dclose(delays_id);
-        status = H5Dclose(rates_id);
-        status = H5Dclose(time_array_id);
-
-        // Close the file. //
-        status = H5Fclose(file_id);
+        printf("CBF: OBSID in RAW file and HDF5 file match!\n");
+        printf("CBF: raw_obsid  = %s \n", raw_obsid);
+        printf("CBF: hdf5_obsid = %s \n", hdf5_obsid);
       }else{
-        printf("CBF: OBSID in RAW file and HDF5 file do not match!\n");
+        printf("CBF (Warning): OBSID in RAW file and HDF5 file DO NOT match!\n");
+        printf("CBF: raw_obsid  = %s \n", raw_obsid);
+        printf("CBF: hdf5_obsid = %s \n", hdf5_obsid);
       }
+      // Read cal_all once per HDF5 file. It doesn't change through out the entire recording.
+      // Read delayinfo once, get all values, and update when required
+      // Open an existing datasets //
+      cal_all_id = H5Dopen(file_id, "/calinfo/cal_all", H5P_DEFAULT);
+      delays_id = H5Dopen(file_id, "/delayinfo/delays", H5P_DEFAULT);
+      rates_id = H5Dopen(file_id, "/delayinfo/rates", H5P_DEFAULT);
+      time_array_id = H5Dopen(file_id, "/delayinfo/time_array", H5P_DEFAULT);
+      npol_id = H5Dopen(file_id, "/diminfo/npol", H5P_DEFAULT);
+      nbeams_id = H5Dopen(file_id, "/diminfo/nbeams", H5P_DEFAULT);
+
+      // Get dataspace ID //
+      sid1 =  H5Dget_space(cal_all_id);
+      sid2 =  H5Dget_space(delays_id);
+      sid3 =  H5Dget_space(rates_id);
+      sid4 =  H5Dget_space(time_array_id);
+  
+      // Gets the number of elements in the data set //
+      cal_all_elements=H5Sget_simple_extent_npoints(sid1);
+      delays_elements=H5Sget_simple_extent_npoints(sid2);
+      rates_elements=H5Sget_simple_extent_npoints(sid3);
+      time_array_elements=H5Sget_simple_extent_npoints(sid4);
+      printf("CBF: Number of elements in the cal_all dataset is : %d\n", cal_all_elements);
+      printf("CBF: Number of elements in the delays dataset is : %d\n", delays_elements);
+      printf("CBF: Number of elements in the rates dataset is : %d\n", rates_elements);
+      printf("CBF: Number of elements in the time_array dataset is : %d\n", time_array_elements);
+
+      // Allocate memory for array
+      cal_all_data = malloc((int)cal_all_elements*sizeof(complex_t));
+      delays_data = malloc((int)delays_elements*sizeof(double));
+      rates_data = malloc((int)rates_elements*sizeof(double));
+      time_array_data = malloc((int)time_array_elements*sizeof(double));
+
+      // Read the dataset. //
+      status = H5Dread(cal_all_id, reim_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, cal_all_data);
+      printf("CBF: cal_all_data[%d].re = %f \n", a + Nant*p + Npol*Nant*c, cal_all_data[a + Nant*p + Npol*Nant*c].re);
+
+      status = H5Dread(delays_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, delays_data);
+      printf("CBF: delays_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, delays_data[a + Nant*b + Nbeams*Nant*t]);
+
+      status = H5Dread(rates_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, rates_data);
+      printf("CBF: rates_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, rates_data[a + Nant*b + Nbeams*Nant*t]);
+
+      status = H5Dread(time_array_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, time_array_data);
+      printf("CBF: time_array_data[0] = %lf \n", time_array_data[0]);
+
+      status = H5Dread(npol_id, H5T_STD_I64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, &npol);
+      printf("npol = %lu \n", npol);
+
+      status = H5Dread(nbeams_id, H5T_STD_I64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, &nbeams);
+      printf("nbeams = %lu \n", nbeams);
+
+      // Close the dataset. //
+      status = H5Dclose(cal_all_id);
+      status = H5Dclose(delays_id);
+      status = H5Dclose(rates_id);
+      status = H5Dclose(time_array_id);
+      status = H5Dclose(npol_id);
+      status = H5Dclose(nbeams_id);
+
+      // Close the file. //
+      status = H5Fclose(file_id);
     }
 
     // Number of blocks to update coefficients with delay polynomials and time difference
@@ -500,22 +504,17 @@ static void *run(hashpipe_thread_args_t * args)
 
         // Update coefficients with difference between realtime_secs and previous real-time secs
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
-        tmp_coefficients = generate_coefficients(delay_pols, coarse_chan_freq, n_chan_per_node, nants, epoch_sec);
+        tmp_coefficients = generate_coefficients(delay_pols, coarse_chan_freq, (int)npol, (int)nbeams, n_chan_per_node, nants, epoch_sec);
         //tmp_coefficients = generate_coefficients(delay_pols, telstate_phase, coarse_chan_freq, n_chan_per_node, nants, epoch_sec);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
        
       }
     }
 
-    // Get the appropriate basefile name from the rawfile_input_thread  
-    if(filenum == 0 && block_count == 0){ // Check for the basefile name at the beginning of the first file in the 5 minute period
-      
-    }
-
     // If packet idx is NOT within start/stop range
     if(pktidx < pktstart || pktstop <= pktidx) {
       printf("CBF: Before checking whether files are open \n");
-      for(int b = 0; b < N_BEAM; b++){
+      for(int b = 0; b < nbeams; b++){
 	// If file open, close it
 	if(fdraw[b] != -1) {
 	  // Close file
@@ -576,9 +575,9 @@ static void *run(hashpipe_thread_args_t * args)
       hgetr8(ptr,"TBIN", &tbin);
       
 
-      // Open N_BEAM filterbank files to save a beam per file i.e. N_BIN*nt*sizeof(float) per file.
+      // Open nbeams filterbank files to save a beam per file i.e. N_BIN*n_samp*sizeof(float) per file.
       printf("CBF: Opening filterbank files \n");
-      for(int b = 0; b < N_BEAM; b++){
+      for(int b = 0; b < nbeams; b++){
         if(b >= 0 && b < 10) {
 	  sprintf(fname, "%s.%04d-cbf0%d.fil", fb_basefilename, filenum, b);
         }else{
@@ -612,8 +611,8 @@ static void *run(hashpipe_thread_args_t * args)
       fb_hdr.foff = obsbw;
       fb_hdr.nchans = n_chan_per_node;
       fb_hdr.fch1 = obsfreq;
-      fb_hdr.nbeams = N_BEAM;
-      fb_hdr.tsamp = tbin * nt;
+      fb_hdr.nbeams = nbeams;
+      fb_hdr.tsamp = tbin * n_samp;
     }
 
     /* See if we need to open next file */
@@ -623,7 +622,7 @@ static void *run(hashpipe_thread_args_t * args)
         filenum = 0;
       }else{
         char fname[256];
-        for(int b = 0; b < N_BEAM; b++){
+        for(int b = 0; b < nbeams; b++){
           close(fdraw[b]);
           if(b >= 0 && b < 10) {
             sprintf(fname, "%s.%04d-cbf0%d.fil", fb_basefilename, filenum, b);
@@ -654,7 +653,7 @@ static void *run(hashpipe_thread_args_t * args)
       printf("CBF: fb_fd_write_header(fdraw[b], &fb_hdr); \n");
       if(block_count == 0){
         printf("CBF: Writing headers to filterbank files! \n");
-	for(int b = 0; b < N_BEAM; b++){
+	for(int b = 0; b < nbeams; b++){
 	  fb_hdr.ibeam =  b;
 	  fb_fd_write_header(fdraw[b], &fb_hdr);
 	}
@@ -669,10 +668,10 @@ static void *run(hashpipe_thread_args_t * args)
       clock_gettime(CLOCK_MONOTONIC, &tval_before);
 
       if(sim_flag == 1){
-        output_data = run_beamformer((signed char *)&db->block[curblock].data, tmp_coefficients, n_chan_per_node, nt);
+        output_data = run_beamformer((signed char *)&db->block[curblock].data, tmp_coefficients, n_chan_per_node, n_samp);
       }
       if(sim_flag == 0){
-        output_data = run_beamformer((signed char *)&db->block[curblock].data, bf_coefficients, n_chan_per_node, nt);
+        output_data = run_beamformer((signed char *)&db->block[curblock].data, bf_coefficients, n_chan_per_node, n_samp);
       }
 
       /* Set beamformer output (CUDA kernel before conversion to power), that is summing, to zero before moving on to next block*/
@@ -693,10 +692,9 @@ static void *run(hashpipe_thread_args_t * args)
       clock_gettime(CLOCK_MONOTONIC, &tval_before_w);
 
       // This may be okay to write to filterbank files, but I'm not entirely confident
-      for(int b = 0; b < N_BEAM; b++){
-	//rv = write(fdraw[b], &output_data[b*nt*n_chan_per_node], (size_t)blocksize);
-        ns = nt/N_TIME_STI;
-        rv = write(fdraw[b], &output_data[b*ns*n_chan_per_node], (size_t)blocksize);
+      for(int b = 0; b < nbeams; b++){
+	//rv = write(fdraw[b], &output_data[b*n_samp*n_chan_per_node], (size_t)blocksize);
+        rv = write(fdraw[b], &output_data[b*n_win*n_chan_per_node], (size_t)blocksize);
 	if(rv != blocksize){
 	  char msg[100];
           perror(thread_name);
@@ -713,7 +711,7 @@ static void *run(hashpipe_thread_args_t * args)
       time_taken_w = (float)(tval_after_w.tv_sec - tval_before_w.tv_sec); //*1e6; // Time in seconds since epoch
       time_taken_w = time_taken_w + (float)(tval_after_w.tv_nsec - tval_before_w.tv_nsec)*1e-9; // Time in nanoseconds since 'tv_sec - start and end'
       write_time = time_taken_w;
-      printf("CBF: Time taken to write block of size, %d bytes, to disk = %f s \n", N_BEAM*blocksize, write_time);
+      printf("CBF: Time taken to write block of size, %d bytes, to disk = %f s \n", nbeams*blocksize, write_time);
       
       printf("CBF: After write() function! Block index = %d \n", block_count);
 
