@@ -638,11 +638,7 @@ float* generate_coefficients(double* phase_up_solution, double* rates, double* d
 }
 */
 
-typedef struct complex_t{
-	float re;
-	float im;
-}complex_t;
-
+// Generate coefficients with delays and phase up solutions from HDF5 file
 float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int n_chan, uint64_t n_real_ant) {
 	float* coefficients;
 	coefficients = (float*)calloc(N_COEFF, sizeof(float));
@@ -654,10 +650,10 @@ float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* 
 				for (int a = 0; a < N_ANT; a++) {
 					if(a < n_real_ant){
 						tau = delay[delay_idx(a, b, n, n_real_ant, n_beam)];
-						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = cos(2 * PI * coarse_chan[f] * tau);
-						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = sin(2 * PI * coarse_chan[f] * tau);
-						//coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].re*cos(2 * PI * coarse_chan[f] * tau) - phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].im*sin(2 * PI * coarse_chan[f] * tau);
-						//coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].re*sin(2 * PI * coarse_chan[f] * tau) + phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].im*cos(2 * PI * coarse_chan[f] * tau);
+						//coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = cos(2 * PI * coarse_chan[f] * tau);
+						//coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = sin(2 * PI * coarse_chan[f] * tau);
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = (float)(phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].re*cos(2 * PI * coarse_chan[f] * tau) - phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].im*sin(2 * PI * coarse_chan[f] * tau));
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = (float)(phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].re*sin(2 * PI * coarse_chan[f] * tau) + phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].im*cos(2 * PI * coarse_chan[f] * tau));
 					}else{
 						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = 0;
 						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = 0;
