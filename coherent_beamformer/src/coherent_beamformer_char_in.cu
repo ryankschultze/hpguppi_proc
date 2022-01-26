@@ -603,14 +603,16 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 
 	return coeff_sim;
 }
-
+/*
 // Generate weights or coefficients with calculated delays (with delay polynomials (tau), coarse frequency channel (coarse_chan), and epoch (t))
 //float* generate_coefficients(float* tau, float* telstate_phase, double* coarse_chan, int n_chan, uint64_t n_real_ant, float t) {
-float* generate_coefficients(float* tau, double* coarse_chan, int n_pol, int n_beam, int n_chan, uint64_t n_real_ant, float t) {
+float* generate_coefficients(double* phase_up_solution, double* rates, double* delay, double* coarse_chan, int n_pol, int n_beam, int n_chan, uint64_t n_real_ant, float t) {
 	float* coefficients;
 	coefficients = (float*)calloc(N_COEFF, sizeof(float));
-	float delay_rate = 0;
-	float delay_offset = 0;
+        float phase_up_re = 0;
+        float phase_up_im = 0;
+	double delay_rate = 0;
+	double delay_offset = 0;
 
 	for (int p = 0; p < n_pol; p++) {
 		for (int f = 0; f < n_chan; f++) {
@@ -623,6 +625,39 @@ float* generate_coefficients(float* tau, double* coarse_chan, int n_pol, int n_b
 						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = sin(2 * PI * coarse_chan[f] * (t*delay_rate + delay_offset));
 						//coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = telstate_phase[2*phase_idx(a, p, f)]*cos(2 * PI * coarse_chan[f] * (t*delay_rate + delay_offset)) - telstate_phase[2*phase_idx(a, p, f) + 1]*sin(2 * PI * coarse_chan[f] * (t*delay_rate + delay_offset));
 						//coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = telstate_phase[2*phase_idx(a, p, f)]*sin(2 * PI * coarse_chan[f] * (t*delay_rate + delay_offset)) + telstate_phase[2*phase_idx(a, p, f) + 1]*cos(2 * PI * coarse_chan[f] * (t*delay_rate + delay_offset));
+					}else{
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = 0;
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = 0;
+					}
+				}
+			}
+		}
+	}
+
+	return coefficients;
+}
+*/
+
+typedef struct complex_t{
+	float re;
+	float im;
+}complex_t;
+
+float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int n_chan, uint64_t n_real_ant) {
+	float* coefficients;
+	coefficients = (float*)calloc(N_COEFF, sizeof(float));
+	double tau = 0;
+
+	for (int p = 0; p < n_pol; p++) {
+		for (int f = 0; f < n_chan; f++) {
+			for (int b = 0; b < n_beam; b++) {
+				for (int a = 0; a < N_ANT; a++) {
+					if(a < n_real_ant){
+						tau = delay[delay_idx(a, b, n, n_real_ant, n_beam)];
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = cos(2 * PI * coarse_chan[f] * tau);
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = sin(2 * PI * coarse_chan[f] * tau);
+						//coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].re*cos(2 * PI * coarse_chan[f] * tau) - phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].im*sin(2 * PI * coarse_chan[f] * tau);
+						//coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].re*sin(2 * PI * coarse_chan[f] * tau) + phase_up[cal_all_idx(a, p, f, n_real_ant, n_pol)].im*cos(2 * PI * coarse_chan[f] * tau);
 					}else{
 						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = 0;
 						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = 0;

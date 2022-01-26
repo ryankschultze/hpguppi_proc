@@ -169,13 +169,6 @@ static void *run(hashpipe_thread_args_t * args)
   float write_time = 0;
   float time_taken = 0;
   float time_taken_w = 0;
-
-  // --------------------- Initial delay calculations with katpoint and mosaic --------------------------------//
-
-  // Array of floats to place data read from file
-  float delay_pols[N_DELAYS];
-  // ------------------------------------------------------------------------------------------------//
-
   
   uint64_t synctime = 0;
   uint64_t hclocks = 1;
@@ -187,25 +180,17 @@ static void *run(hashpipe_thread_args_t * args)
   uint64_t blksize = 0; // Raw file block size
   int n_samp = 0; // Number of time samples per block in a RAW file
   int n_win = 0; // Number of STI windows in output
-  //int n_telstate_phase = 0;
-  double realtime_secs = 0.0; // Real-time in seconds according to the RAW file metadata
-  double epoch_sec = 0.0; // Epoch used for delay polynomial
-
-  // The number of blocks in a RAW file (128 blocks) should be divisible by n_calc_blks
-  // n_calc_blks is the duration of the delay polynomial calculation e.g. 128 blocks is approx. 5 seconds
-  // Currently, n_update_blks should not exceed 481 ms as stated by FBFUSE which is approximately 12 blocks
-  int n_calc_blks = 128; // Number of blocks to calculate delay polynomials
-  double update_time = 1; // Number of seconds to update coefficients with new delay polynomial and change in time
-  double blk_time = 0; // Time in seconds per block
-  long int n_update_blks = 0; // Number of blocks to update coefficients with new epoch
+  double pktidx_time = 0;
+  double block_midtime = 0;
+  double time_array_midpoint = 0;
 
   char cur_fname[200] = {0};
   char tmp_fname[200] = {0};
   char indir[200] = {0};
   strcpy(tmp_fname, "tmp_fname"); // Initialize as different string that cur_fname
 
-  hid_t file_id, npol_id, nbeams_id, obs_id, cal_all_id, delays_id, rates_id, time_array_id, sid1, sid2, sid3, sid4, obs_type, native_obs_type; // identifiers //
-  herr_t status, cal_all_elements, delays_elements, rates_elements, time_array_elements;
+  hid_t file_id, npol_id, nbeams_id, obs_id, cal_all_id, delays_id, time_array_id, sid1, sid2, sid4, obs_type, native_obs_type; // identifiers //
+  herr_t status, cal_all_elements, delays_elements, time_array_elements;
 
   typedef struct complex_t{
     float re;
@@ -219,10 +204,11 @@ static void *run(hashpipe_thread_args_t * args)
 
   complex_t *cal_all_data;
   double *delays_data;
-  double *rates_data;
   double *time_array_data;
   uint64_t nbeams;
   uint64_t npol;
+
+  int time_array_idx = 0; // time_array index
 
   int Nant = 61;    // Number of antennas
   int Nbeams = 61;  // Number of beams
@@ -236,7 +222,6 @@ static void *run(hashpipe_thread_args_t * args)
 
   float* bf_coefficients; // Beamformer coefficients
   float* tmp_coefficients; // Temporary coefficients
-  //float* telstate_phase[N_PHASE*N_FREQ]; // Telstate phase solutions
 
   // Frequency parameter initializations
   float full_bw = 856e6; // Hz
@@ -328,9 +313,6 @@ static void *run(hashpipe_thread_args_t * args)
       // Number of STI windows
       n_win = n_samp/N_TIME_STI;
 
-      // Time in seconds per block
-      blk_time = n_samp/(chan_bw*1e6);
-
       printf("CBF: Got center frequency, obsfreq = %lf MHz, n. time samples = %d, and number of blocks to update = %ld \n", obsfreq, n_samp, n_update_blks);
 
       // Calculate coarse channel center frequencies depending on the mode and center frequency that spans the RAW file
@@ -421,7 +403,6 @@ static void *run(hashpipe_thread_args_t * args)
       // Open an existing datasets //
       cal_all_id = H5Dopen(file_id, "/calinfo/cal_all", H5P_DEFAULT);
       delays_id = H5Dopen(file_id, "/delayinfo/delays", H5P_DEFAULT);
-      rates_id = H5Dopen(file_id, "/delayinfo/rates", H5P_DEFAULT);
       time_array_id = H5Dopen(file_id, "/delayinfo/time_array", H5P_DEFAULT);
       npol_id = H5Dopen(file_id, "/diminfo/npol", H5P_DEFAULT);
       nbeams_id = H5Dopen(file_id, "/diminfo/nbeams", H5P_DEFAULT);
@@ -429,83 +410,69 @@ static void *run(hashpipe_thread_args_t * args)
       // Get dataspace ID //
       sid1 =  H5Dget_space(cal_all_id);
       sid2 =  H5Dget_space(delays_id);
-      sid3 =  H5Dget_space(rates_id);
       sid4 =  H5Dget_space(time_array_id);
   
       // Gets the number of elements in the data set //
       cal_all_elements=H5Sget_simple_extent_npoints(sid1);
       delays_elements=H5Sget_simple_extent_npoints(sid2);
-      rates_elements=H5Sget_simple_extent_npoints(sid3);
       time_array_elements=H5Sget_simple_extent_npoints(sid4);
       printf("CBF: Number of elements in the cal_all dataset is : %d\n", cal_all_elements);
       printf("CBF: Number of elements in the delays dataset is : %d\n", delays_elements);
-      printf("CBF: Number of elements in the rates dataset is : %d\n", rates_elements);
       printf("CBF: Number of elements in the time_array dataset is : %d\n", time_array_elements);
 
       // Allocate memory for array
       cal_all_data = malloc((int)cal_all_elements*sizeof(complex_t));
       delays_data = malloc((int)delays_elements*sizeof(double));
-      rates_data = malloc((int)rates_elements*sizeof(double));
       time_array_data = malloc((int)time_array_elements*sizeof(double));
 
       // Read the dataset. //
-      status = H5Dread(cal_all_id, reim_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, cal_all_data);
-      printf("CBF: cal_all_data[%d].re = %f \n", a + Nant*p + Npol*Nant*c, cal_all_data[a + Nant*p + Npol*Nant*c].re);
-
-      status = H5Dread(delays_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, delays_data);
-      printf("CBF: delays_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, delays_data[a + Nant*b + Nbeams*Nant*t]);
-
-      status = H5Dread(rates_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, rates_data);
-      printf("CBF: rates_data[%d] = %lf \n", a + Nant*b + Nbeams*Nant*t, rates_data[a + Nant*b + Nbeams*Nant*t]);
-
-      status = H5Dread(time_array_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, time_array_data);
-      printf("CBF: time_array_data[0] = %lf \n", time_array_data[0]);
-
       status = H5Dread(npol_id, H5T_STD_I64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, &npol);
       printf("npol = %lu \n", npol);
 
       status = H5Dread(nbeams_id, H5T_STD_I64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, &nbeams);
       printf("nbeams = %lu \n", nbeams);
 
+      status = H5Dread(cal_all_id, reim_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, cal_all_data);
+      printf("CBF: cal_all_data[%d].re = %f \n", cal_all_idx(a, p, c, (int)nants, (int)npol), cal_all_data[cal_all_idx(a, p, c, (int)nants, (int)npol)].re);
+
+      status = H5Dread(delays_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, delays_data);
+      printf("CBF: delays_data[%d] = %lf \n", delay_idx(a, b, t, (int)nants, (int)nbeams), delays_data[delay_idx(a, b, t, (int)nants, (int)nbeams)]);
+
+      status = H5Dread(time_array_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, time_array_data);
+      printf("CBF: time_array_data[0] = %lf \n", time_array_data[0]);
+
       // Close the dataset. //
       status = H5Dclose(cal_all_id);
       status = H5Dclose(delays_id);
-      status = H5Dclose(rates_id);
       status = H5Dclose(time_array_id);
       status = H5Dclose(npol_id);
       status = H5Dclose(nbeams_id);
 
       // Close the file. //
       status = H5Fclose(file_id);
+
+      time_array_idx = 0;
+
+      if(sim_flag == 0){
+        // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
+        tmp_coefficients = generate_coefficients(cal_all, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, n_chan_per_node, nants);
+        memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
+      }
     }
 
-    // Number of blocks to update coefficients with delay polynomials and time difference
-    n_update_blks = lround(update_time/blk_time);
-
     if(sim_flag == 0){
+      
+      pktidx_time = synctime + (pktidx*tbin*n_samp/piperblk);
+      block_midtime = pktidx_time + tbin*n_samp/2;
+      time_array_midpoint = (time_array[time_array_idx] + time_array[time_array_idx+1])/2;
       // Update coefficients every specified number of blocks
-      if(block_count%n_update_blks == 0){
-        // Calc real-time seconds since SYNCTIME for pktidx:
-        //
-        //                        pktidx * hclocks
-        //     realtime_secs = -----------------------
-        //                      2e6 * fenchan * chan_bw
-        // This is the value that will be used in the delay polynomial (t, the epoch)
-        if(fenchan * chan_bw != 0.0) {
-          realtime_secs = (pktidx * hclocks) / (2e6 * fenchan * fabs(chan_bw));
-        }
+      if(block_midtime >= time_array_midpoint){
+        // Then update with delays[n+1]
+        time_array_idx += 1;
 
-        epoch_sec = synctime + realtime_secs;
-
-        printf("CBF: In update coefficients if(), epoch_sec = %lf...\n", epoch_sec);
-
-        // May need to calculate difference in time between updates here to be even more precise
-        
-
-        // Update coefficients with difference between realtime_secs and previous real-time secs
+        // Update coefficients with new delay
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
-        tmp_coefficients = generate_coefficients(delay_pols, coarse_chan_freq, (int)npol, (int)nbeams, n_chan_per_node, nants, epoch_sec);
-        //tmp_coefficients = generate_coefficients(delay_pols, telstate_phase, coarse_chan_freq, n_chan_per_node, nants, epoch_sec);
+        tmp_coefficients = generate_coefficients(cal_all, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, n_chan_per_node, nants);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
        
       }
