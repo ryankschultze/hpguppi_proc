@@ -191,6 +191,10 @@ static void *run(hashpipe_thread_args_t * args)
     strcpy(tmp_fname, "tmp_fname"); // Initialize as different string that cur_fname
     char *base_pos;
     long int period_pos;
+    char character = '/';
+    char *char_offset; 
+    long int slash_pos;
+    char new_base[200];
 
     char outdir[256];
     hgets(st.buf, "OUTDIR", sizeof(outdir), outdir);
@@ -278,11 +282,25 @@ static void *run(hashpipe_thread_args_t * args)
                 period_pos = base_pos-cur_fname;
                 printf("RAW INPUT: The last position of . is %ld \n", period_pos);
                 memcpy(basefilename, cur_fname, period_pos); // Copy base filename portion of file name to tmp_basefilename variable
-                hputs(st.buf, "BASEFILE", basefilename);
+                
                 printf("RAW INPUT: Base filename from command: %s \n", basefilename);
+
+                // Get basefilename with no path and place in status buffer
+                // strrchr() finds the last occurence of the specified character
+                char_offset = strrchr(basefilename, character);
+                slash_pos = char_offset-basefilename;
+                printf("RAW INPUT: The last position of %c is %ld \n", character, slash_pos);
+
+                // Get file name with no path
+                memcpy(new_base, &basefilename[slash_pos+1], sizeof(basefilename)-slash_pos);
+                printf("RAW INPUT: File name with no path: %s \n", new_base);
+
+                hputs(st.buf, "BASEFILE", new_base);
+
             }
             else{
                 // The RAW file hasn't changed so wait for new file to show up in the buffer
+                printf("RAW INPUT: Waiting for new RAW file name! \n");
                 continue;
             }
             sprintf(fname, "%s.%04d.raw", basefilename, filenum);
@@ -416,9 +434,11 @@ static void *run(hashpipe_thread_args_t * args)
                 printf("RAW INPUT: Opening next raw file '%s'\n", fname);
                 fdin = open(fname, open_flags, 0644);
                 if (fdin==-1) {
-                    hashpipe_error(__FUNCTION__,"Error opening file.");
+                  filenum=0;
+                /*    hashpipe_error(__FUNCTION__,"Error opening file.");
                     //[TODO] Add extra blk with pktidx=0 to trigger stop.
                     pthread_exit(NULL);
+                */
                 }
             }
             block_count=0;

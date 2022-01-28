@@ -4,7 +4,7 @@ prefix ?= /usr/local
 libdir ?= $(prefix)/lib
 includedir ?= $(prefix)/include
 bindir ?= $(prefix)/bin
-CUDA_DIR ?= $(prefix)/NVIDIA/cuda
+CUDA_DIR ?= $(prefix)/cuda
 ifneq ($(strip $(OSTYPE)),osx)
 CUDA_LIBDIR ?= $(CUDA_DIR)/lib64
 else
@@ -15,8 +15,10 @@ endif
 bflibdir ?= /home/mruzinda/hpguppi_proc/lib
 bfincludedir ?= /home/mruzinda/hpguppi_proc/include
 
+#On blc03 with NVIDIA RTX 2080
+CUDA_ARCH ?= "-gencode=arch=compute_75,code=sm_75"
 #On blc03 with NVIDIA A5000
-CUDA_ARCH ?= "-gencode=arch=compute_80,code=sm_80"
+#CUDA_ARCH ?= "-gencode=arch=compute_80,code=sm_80"
 #On blc02 with NVIDIA Xp
 #CUDA_ARCH ?= "-gencode=arch=compute_53,code=sm_53"
 

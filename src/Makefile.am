@@ -11,7 +11,9 @@ AM_CFLAGS = -ggdb -fPIC -O3 -Wall -Werror -Wno-error=cpp -fno-strict-aliasing @X
 hpguppi_databuf = hpguppi_databuf.h \
 		  hpguppi_databuf.c
 
-hpguppi_support = hpguppi_params.c \
+hpguppi_support = hpguppi_rawspec.h \
+                  hpguppi_rawspec.c \
+                  hpguppi_params.c \
 		  hpguppi_time.h   \
 		  hpguppi_time.c   \
 		  hpguppi_util.h   \

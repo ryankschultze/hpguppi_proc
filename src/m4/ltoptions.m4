@@ -1,1 +1,1 @@
-/opt/conda/share/aclocal/ltoptions.m4
+/usr/share/aclocal/ltoptions.m4
