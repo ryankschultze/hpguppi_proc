@@ -186,9 +186,9 @@ static void *run(hashpipe_thread_args_t * args)
     hgets(st.buf, "BASEFILE", sizeof(basefilename), basefilename);
 
     char cur_fname[200] = {0};
-    char tmp_fname[200] = {0};
+    char prev_fname[200] = {0};
     char indir[200] = {0};
-    strcpy(tmp_fname, "tmp_fname"); // Initialize as different string that cur_fname
+    strcpy(prev_fname, "prev_fname"); // Initialize as different string that cur_fname
     char *base_pos;
     long int period_pos;
     char character = '/';
@@ -275,8 +275,8 @@ static void *run(hashpipe_thread_args_t * args)
             }
             // Now create the basefilename
             // If a '...0000.raw' file exists, that is different from the previous '...0000.raw' file
-            if (tmp_fname != cur_fname){
-                strcpy(tmp_fname, cur_fname); // Save this file name for comparison on the next iteration
+            if (strcmp(prev_fname, cur_fname) != 0){
+                strcpy(prev_fname, cur_fname); // Save this file name for comparison on the next iteration
                 printf("RAW INPUT: Got current RAW file: %s\n", cur_fname);
                 base_pos = strchr(cur_fname, '.'); // Finds the first occurence of a period in the filename
                 period_pos = base_pos-cur_fname;
@@ -300,7 +300,7 @@ static void *run(hashpipe_thread_args_t * args)
             }
             else{
                 // The RAW file hasn't changed so wait for new file to show up in the buffer
-                printf("RAW INPUT: Waiting for new RAW file name! \n");
+                //printf("RAW INPUT: Waiting for new RAW file name! \n");
                 continue;
             }
             sprintf(fname, "%s.%04d.raw", basefilename, filenum);
@@ -351,16 +351,17 @@ static void *run(hashpipe_thread_args_t * args)
             blocsize = get_block_size(header_buf, MAX_HDR_SIZE);
 
             // Can only check next block if there is one so make sure one exists
-            if(block_count < MAX_BLKS_PER_FILE-1){
+            if(blocsize > 0){
                 piperblk = get_piperblk(header_buf, MAX_HDR_SIZE);
                 cur_pktidx = get_cur_pktidx(header_buf, MAX_HDR_SIZE);
                 nxt_pktidx = get_nxt_pktidx(fdin, blocsize, header_buf, MAX_HDR_SIZE);
 
                 printf("RAW INPUT: Current pktidx = %ld and next pktidx = %ld \n", cur_pktidx, nxt_pktidx);
+                
                 // Check to see whether there will be any following blocks that are missed
                 // If the next packet index is greater than the current pkt idx + piperblk, then N blocks were missed
                 // So replace with zero blocks
-                if(nxt_pktidx > (cur_pktidx+piperblk)){
+                if((nxt_pktidx > 0) && (nxt_pktidx > (cur_pktidx+piperblk))){
                     // Assuming piperblk is the number of packets per block
                     // And PKTIDX is the index of the first packet in a block
                     n_missed_blks = (nxt_pktidx - cur_pktidx)/piperblk;
@@ -422,25 +423,21 @@ static void *run(hashpipe_thread_args_t * args)
         block_count++;
 
         /* See if we need to open next file */
-        if (block_count>= MAX_BLKS_PER_FILE) {
+        if (read_blocsize == 0) {
             close(fdin);
             filenum++;
-            // Find new basefilename after reading all the ones in the NVMe buffer
-            if(filenum >= N_FILE){
-                filenum=0;
-                fdin=-1;
-            }else{
-                sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
-                printf("RAW INPUT: Opening next raw file '%s'\n", fname);
-                fdin = open(fname, open_flags, 0644);
-                if (fdin==-1) {
-                  filenum=0;
-                /*    hashpipe_error(__FUNCTION__,"Error opening file.");
-                    //[TODO] Add extra blk with pktidx=0 to trigger stop.
-                    pthread_exit(NULL);
-                */
-                }
+            
+            sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
+            printf("RAW INPUT: Opening next raw file '%s'\n", fname);
+            fdin = open(fname, open_flags, 0644);
+            if (fdin==-1) {
+              filenum=0;
+            /*    hashpipe_error(__FUNCTION__,"Error opening file.");
+                //[TODO] Add extra blk with pktidx=0 to trigger stop.
+                pthread_exit(NULL);
+            */
             }
+            
             block_count=0;
         }
 
