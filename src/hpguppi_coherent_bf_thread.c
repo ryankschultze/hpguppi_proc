@@ -79,25 +79,15 @@ update_fb_hdrs_from_raw_hdr_cbf(fb_hdr_t fb_hdr, const char *p_rawhdr)
 
   // Update filterbank headers based on raw params and Nts etc.
   // Same for all products
-  fb_hdr.telescope_id = fb_telescope_id(raw_hdr.telescop);
   fb_hdr.src_raj = raw_hdr.ra;
   fb_hdr.src_dej = raw_hdr.dec;
-  fb_hdr.tstart = raw_hdr.mjd;
   fb_hdr.ibeam = raw_hdr.beam_id;
   fb_hdr.nbeams = raw_hdr.nbeam;
   strncpy(fb_hdr.source_name, raw_hdr.src_name, 80);
   fb_hdr.source_name[80] = '\0';
-  // Output product dependent
-  fb_hdr.foff = raw_hdr.obsbw/raw_hdr.obsnchan/N_TIME;
-  // This computes correct fch1 for odd or even number of fine channels
-  fb_hdr.fch1 = raw_hdr.obsfreq
-    - raw_hdr.obsbw*(raw_hdr.obsnchan-1)/(2*raw_hdr.obsnchan)
-    - (N_TIME/2) * fb_hdr.foff
-    ;//TODO + schan * raw_hdr.obsbw / raw_hdr.obsnchan; // Adjust for schan
   //fb_hdr.nchans = 16; // 1k mode
   fb_hdr.nchans = 64; // 4k mode
   //fb_hdr.nchans = 512; // 32k mode
-  fb_hdr.tsamp = raw_hdr.tbin * N_TIME * 256*1024;
   // TODO az_start, za_start
 }
 
@@ -135,7 +125,7 @@ static void *run(hashpipe_thread_args_t * args)
   int64_t pktidx=0, pktstart=0, pktstop=0;
   int blocksize=0; // Size of beamformer output (output block size)
   int curblock=0;
-  int block_count=0, filenum=0;
+  int block_count=0; //filenum=0;
   int got_packet_0=0, first=1;
   char *ptr;
   int rv = 0;
@@ -146,10 +136,14 @@ static void *run(hashpipe_thread_args_t * args)
   char hdf5_basefilename[200];
   char outdir[200];
   char bfrdir[200];
+  char src_name[200];
+  uint64_t stt_imjd = 0;
+  uint64_t stt_smjd = 0;
   //char character = '/';
   //char *char_offset; 
   //long int slash_pos;
   char raw_basefilename[200];
+  char raw_filename[200];
   char prev_basefilename[200];
   strcpy(prev_basefilename, "prev_basefilename"); // Initialize as different string that raw_basefilename
   //char new_base[200];
@@ -218,10 +212,8 @@ static void *run(hashpipe_thread_args_t * args)
   float* tmp_coefficients; // Temporary coefficients
 
   // Frequency parameter initializations
-  float full_bw = 856e6; // Hz
   float coarse_chan_band = 0; // Coarse channel bandwidth
   double coarse_chan_freq[N_FREQ]; // Coarse channel center frequencies in the band 
-  int n_nodes = 64; // Number of compute nodes
   int n_chan_per_node = 0; // Number of coarse channels per compute node
 
   int sim_flag = 1; // Flag to use simulated coefficients (set to 1) or calculated beamformer coefficients (set to 0)
@@ -297,8 +289,11 @@ static void *run(hashpipe_thread_args_t * args)
     hgetu8(ptr, "OBSNCHAN", &obsnchan);
     //hgetu8(ptr, "NPOL", &npol);
     hgetu8(ptr, "PIPERBLK", &piperblk);
+    hgetu8(ptr, "STT_SMJD", &stt_smjd);
+    hgetu8(ptr, "STT_IMJD", &stt_imjd);
     hgetr8(ptr,"TBIN", &tbin);
     hgets(ptr, "OBSID", sizeof(raw_obsid), raw_obsid);
+    hgets(ptr, "SRC_NAME", sizeof(src_name), src_name);
     hgetr8(ptr, "OBSBW", &obsbw);
 
     //printf("CBF: Number of polarizations (from RAW file) = %d\n", (int)npol);
@@ -353,7 +348,7 @@ static void *run(hashpipe_thread_args_t * args)
       // Set specified path to write filterbank files
       strcpy(fb_basefilename, outdir);
       strcat(fb_basefilename, "/");
-      strcat(fb_basefilename, raw_basefilename);
+      strcat(fb_basefilename, src_name);
       printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
       if(sim_flag == 0){
@@ -579,22 +574,15 @@ static void *run(hashpipe_thread_args_t * args)
       for(int b = 0; b < nbeams; b++){
         if(b >= 0 && b < 10) {
           if(sim_flag == 0){
-	    sprintf(fname, "%s_B0%d.%04d.fil",  fb_basefilename, b, filenum);
+	    sprintf(fname, "%s_B0%d.fil",  fb_basefilename, b);
           }else if(sim_flag == 1){
-            sprintf(fname, "%s_B0.%04d.fil",  fb_basefilename, filenum);
+            sprintf(fname, "%s_B0.fil",  fb_basefilename);
           }
         }else{
-          sprintf(fname, "%s_B%d.%04d.fil", fb_basefilename, b, filenum);
+          sprintf(fname, "%s_B%d.fil", fb_basefilename, b);
         }
         hashpipe_info(thread_name, "Opening fil file '%s'", fname);
-	  last_slash = strrchr(fname, '/');
-        if(last_slash) {
-	  strncpy(fb_hdr.rawdatafile, last_slash+1, 80);
-        } else {
-	  strncpy(fb_hdr.rawdatafile, fname, 80);
-        }
-        fb_hdr.rawdatafile[80] = '\0';
-                
+
                 
         fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_TRUNC, 0644);
         if(fdraw[b] == -1) {
@@ -608,15 +596,18 @@ static void *run(hashpipe_thread_args_t * args)
       }
       printf("CBF: Opened filterbank files after for() loop \n");
 
-      //Fix some header stuff here due to multi-antennas
-      // Need to understand and appropriately modify these values if necessary
-      // Default values for now
+      // Filterbank header values for now
       fb_hdr.telescope_id = 64; // MeerKAT ID (Don't know why it's 64, maybe associated with the number of antennas)
       fb_hdr.foff = chan_bw; // Filterbank channel bandwidth
       fb_hdr.nchans = n_chan_per_node; // Number of channels in a filterbank file
       fb_hdr.fch1 = coarse_chan_freq[0]*1e-6; // Center frequency in MHz
       fb_hdr.tsamp = tbin*N_TIME_STI; // Time interval between output samples
-      
+      fb_hdr.tstart = stt_imjd + stt_smjd/86400.0; // tstart for now
+      // Write RAW filename to filterbank header
+      sprintf(raw_filename, "%s.0000.raw",  raw_basefilename);
+      strncpy(fb_hdr.rawdatafile, raw_filename, 80);
+      fb_hdr.rawdatafile[80] = '\0';
+
       /* Write filterbank header to output file */
       printf("CBF: Writing headers to filterbank files! \n");
       for(int b = 0; b < nbeams; b++){
