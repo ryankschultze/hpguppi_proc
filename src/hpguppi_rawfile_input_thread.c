@@ -246,8 +246,10 @@ static void *run(hashpipe_thread_args_t * args)
 #if VERBOSE
 	printf("RAW INPUT: Before file open if{} \n");
 #endif
+
         //Read raw files
         if (fdin == -1) { //no file opened
+
             // If there is no file ready at the beginning of processing then wait for it to be written to the buffer.
             while(strlen(cur_fname) == 0){
                 hashpipe_status_lock_safe(&st);
@@ -350,7 +352,11 @@ static void *run(hashpipe_thread_args_t * args)
             lseek(fdin, headersize-MAX_HDR_SIZE, SEEK_CUR);
             blocsize = get_block_size(header_buf, MAX_HDR_SIZE);
 
-            // Can only check next block if there is one so make sure one exists
+            //hashpipe_status_lock_safe(&st);
+            //hputu8(st.buf, "RBLKSIZE", (uint64_t)blocsize);
+            //hashpipe_status_unlock_safe(&st);
+
+            // Can only check next block if there IS one so make sure one exists
             if(blocsize > 0){
                 piperblk = get_piperblk(header_buf, MAX_HDR_SIZE);
                 cur_pktidx = get_cur_pktidx(header_buf, MAX_HDR_SIZE);
@@ -366,6 +372,20 @@ static void *run(hashpipe_thread_args_t * args)
                     // And PKTIDX is the index of the first packet in a block
                     n_missed_blks = (nxt_pktidx - cur_pktidx)/piperblk;
                 }
+            }// This (else if) means that we are at the end of the RAW file so advance to the next one to put the appropriate block of data in the buffer
+            else if(blocsize <= 0){
+                close(fdin);
+                filenum++;
+            
+                sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
+                printf("RAW INPUT: Opening next raw file '%s'\n", fname);
+                fdin = open(fname, open_flags, 0644);
+                if (fdin==-1) {
+                    filenum=0;
+                }
+            
+                block_count=0;
+                continue;
             }
 
 #if VERBOSE
@@ -421,25 +441,6 @@ static void *run(hashpipe_thread_args_t * args)
         // Setup for next block
         block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
         block_count++;
-
-        /* See if we need to open next file */
-        if (read_blocsize == 0) {
-            close(fdin);
-            filenum++;
-            
-            sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
-            printf("RAW INPUT: Opening next raw file '%s'\n", fname);
-            fdin = open(fname, open_flags, 0644);
-            if (fdin==-1) {
-              filenum=0;
-            /*    hashpipe_error(__FUNCTION__,"Error opening file.");
-                //[TODO] Add extra blk with pktidx=0 to trigger stop.
-                pthread_exit(NULL);
-            */
-            }
-            
-            block_count=0;
-        }
 
         /* Will exit if thread has been cancelled */
         pthread_testcancel();
