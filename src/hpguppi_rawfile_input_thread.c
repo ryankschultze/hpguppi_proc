@@ -138,6 +138,18 @@ void set_output_path(char * header_buf, char * outdir, size_t len)
     }
 }
 
+void set_blocksize(char * header_buf, int blocsize, size_t len)
+{
+    int i;
+    //Read header loop over the 80-byte records
+    for (i=0; i<len; i += 80) {
+        if(!strncmp(header_buf+i, "BLOCSIZE", 8)) {
+            hputi4(header_buf, "BLOCSIZE", blocsize);
+            break;
+        }
+    }
+}
+
 ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
 {
     ssize_t bytes_read;
@@ -327,6 +339,7 @@ static void *run(hashpipe_thread_args_t * args)
 #if VERBOSE
 	    printf("RAW INPUT: char *header = hpguppi_databuf_header(db, block_idx); \n");
 #endif
+
             header = hpguppi_databuf_header(db, block_idx);
             hashpipe_status_lock_safe(&st);
             hputs(st.buf, status_key, "receiving");
@@ -348,9 +361,14 @@ static void *run(hashpipe_thread_args_t * args)
             struct timespec tval_before, tval_after;
             clock_gettime(CLOCK_MONOTONIC, &tval_before);
 #endif
+            // Initialize block in buffer
             ptr = hpguppi_databuf_data(db, block_idx);
             lseek(fdin, headersize-MAX_HDR_SIZE, SEEK_CUR);
             blocsize = get_block_size(header_buf, MAX_HDR_SIZE);
+
+            // Set block size in header of the block in the buffer
+            // If this is not done, it will set the block size of in the header of the RAW file which is never 0
+            //set_blocksize(header, blocsize, MAX_HDR_SIZE);
 
             //hashpipe_status_lock_safe(&st);
             //hputu8(st.buf, "RBLKSIZE", (uint64_t)blocsize);

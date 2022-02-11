@@ -255,6 +255,7 @@ static void *run(hashpipe_thread_args_t * args)
     input_data_pin((signed char *)&db->block[i].data);
   }
 
+  int wait_count = 0;
   while (run_threads()) {
 
     /* Note waiting status */
@@ -264,35 +265,34 @@ static void *run(hashpipe_thread_args_t * args)
 
     /* Wait for buf to have data */
     rv = hpguppi_input_databuf_wait_filled(db, curblock);
-
+    // if(rv!=0)continue;
+    
     if (rv!=0){
-      for(int b = 0; b < nbeams; b++){
-	// If file open, close it
-	if(fdraw[b] != -1) {
-	  // Close file
-	  close(fdraw[b]);
-	  // Reset fdraw, got_packet_0, filenum, block_count
-	  fdraw[b] = -1;
-	  if(b == 0){ // These variables only need to be set to zero once
-	    got_packet_0 = 0;
-	    //filenum = 0;
-	    block_count=0;
-	    // Print end of recording conditions
-	    hashpipe_info(thread_name, "recording stopped: "
-	      "pktstart %ld pktstop %ld pktidx %ld",
-	      pktstart, pktstop, pktidx);
-	  }
-	}
+      wait_count += 1;
+      if(wait_count == 100){
+        wait_count = 0;
+        for(int b = 0; b < nbeams; b++){
+	  // If file open, close it
+          if(fdraw[b] != -1) {
+            // Close file
+            close(fdraw[b]);
+            // Reset fdraw, got_packet_0, filenum, block_count
+            fdraw[b] = -1;
+            if(b == 0){ // These variables only need to be set to zero once
+              got_packet_0 = 0;
+              //filenum = 0;
+              block_count=0;
+              // Print end of recording conditions
+              hashpipe_info(thread_name, "recording stopped: "
+              "pktstart %ld pktstop %ld pktidx %ld",
+              pktstart, pktstop, pktidx);
+            }
+          }
+        }
       }
-      /* Mark as free */
-      hpguppi_input_databuf_set_free(db, curblock);
-
-      /* Go to next block */
-      curblock = (curblock + 1) % db->header.n_block;
-
       continue;
     }
-
+    if(wait_count > 0)wait_count = 0;
 
     /* Read param struct for this block */
     ptr = hpguppi_databuf_header(db, curblock);
@@ -302,7 +302,7 @@ static void *run(hashpipe_thread_args_t * args)
     } else {
       hpguppi_read_subint_params(ptr, &gp, &pf);
     }
-
+    
     /* Read pktidx, pktstart, pktstop from header */
     hgeti8(ptr, "PKTIDX", &pktidx);
     hgeti8(ptr, "PKTSTART", &pktstart);
@@ -320,12 +320,12 @@ static void *run(hashpipe_thread_args_t * args)
     hgetu8(ptr, "PIPERBLK", &piperblk);
     hgetu8(ptr, "STT_SMJD", &stt_smjd);
     hgetu8(ptr, "STT_IMJD", &stt_imjd);
-    hgetu8(ptr, "BLOCSIZE", &raw_blocsize); // Raw file block size
     hgetr8(ptr,"TBIN", &tbin);
     hgets(ptr, "OBSID", sizeof(raw_obsid), raw_obsid);
     hgets(ptr, "SRC_NAME", sizeof(src_name), src_name);
     hgetr8(ptr, "OBSBW", &obsbw);
-
+    hgetu8(ptr, "BLOCSIZE", &raw_blocsize); // Raw file block size
+        
     //printf("CBF: Number of polarizations (from RAW file) = %d\n", (int)npol);
     
     hashpipe_status_lock_safe(st);
