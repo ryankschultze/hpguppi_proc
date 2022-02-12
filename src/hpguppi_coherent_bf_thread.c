@@ -169,6 +169,7 @@ static void *run(hashpipe_thread_args_t * args)
   uint64_t synctime = 0;
   uint64_t hclocks = 1;
   uint32_t fenchan = 1;
+  uint32_t schan = 0;
   double chan_bw = 1.0;
   uint64_t nants = 0;
   uint64_t obsnchan = 0;
@@ -224,8 +225,8 @@ static void *run(hashpipe_thread_args_t * args)
     // Generate weights or coefficients (using simulate_coefficients() for now)
     // Used with simulated data when no RAW file is read
     //int n_chan = 16;  // 1k mode
-    //int n_chan = 64;  // 4k mode
-    int n_chan = 512; // 32k mode
+    int n_chan = 64;  // 4k mode
+    //int n_chan = 512; // 32k mode
     int n_pol = 2;
     int n_beam = 1;
     tmp_coefficients = simulate_coefficients(n_pol, n_beam, n_chan);
@@ -269,7 +270,7 @@ static void *run(hashpipe_thread_args_t * args)
     
     if (rv!=0){
       wait_count += 1;
-      if(wait_count == 100){
+      if(wait_count == 50){
         wait_count = 0;
         for(int b = 0; b < nbeams; b++){
 	  // If file open, close it
@@ -316,6 +317,7 @@ static void *run(hashpipe_thread_args_t * args)
     hgetr8(ptr, "OBSFREQ", &obsfreq);
     hgetu8(ptr, "NANTS", &nants);
     hgetu8(ptr, "OBSNCHAN", &obsnchan);
+    hgetu4(ptr, "SCHAN", &schan);
     //hgetu8(ptr, "NPOL", &npol);
     hgetu8(ptr, "PIPERBLK", &piperblk);
     hgetu8(ptr, "STT_SMJD", &stt_smjd);
@@ -336,6 +338,7 @@ static void *run(hashpipe_thread_args_t * args)
     //printf("CBF: RAW file base filename from command: %s and outdir is: %s \n", raw_basefilename, outdir);
       
     printf("CBF: pktidx = %ld, pktstart = %ld, and pktstop = %ld\n", pktidx, pktstart, pktstop);
+    printf("CBF: schan = %d \n", (int)schan);
 
     // Get the appropriate basefile name from the rawfile_input_thread 
     // Get HDF5 file data at the beginning of the processing
@@ -370,7 +373,7 @@ static void *run(hashpipe_thread_args_t * args)
       // Set specified path to write filterbank files
       strcpy(fb_basefilename, outdir);
       strcat(fb_basefilename, "/");
-      strcat(fb_basefilename, src_name);
+      strcat(fb_basefilename, raw_basefilename);
       printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
       if(sim_flag == 0){
@@ -495,7 +498,7 @@ static void *run(hashpipe_thread_args_t * args)
         time_array_idx = 0;
 
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
-        tmp_coefficients = generate_coefficients(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, n_chan_per_node, nants);
+        tmp_coefficients = generate_coefficients(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, (int)schan, n_chan_per_node, nants);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
       }
 
@@ -543,7 +546,7 @@ static void *run(hashpipe_thread_args_t * args)
 
         // Update coefficients with new delay
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
-        tmp_coefficients = generate_coefficients(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, n_chan_per_node, nants);
+        tmp_coefficients = generate_coefficients(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, (int)schan, n_chan_per_node, nants);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
        
       }
@@ -583,12 +586,12 @@ static void *run(hashpipe_thread_args_t * args)
       for(int b = 0; b < nbeams; b++){
         if(b >= 0 && b < 10) {
           if(sim_flag == 0){
-	    sprintf(fname, "%s_B0%d.fil",  fb_basefilename, b);
+	    sprintf(fname, "%s.B0%d.fil",  fb_basefilename, b);
           }else if(sim_flag == 1){
-            sprintf(fname, "%s_B0.fil",  fb_basefilename);
+            sprintf(fname, "%s.B0.fil",  fb_basefilename);
           }
         }else{
-          sprintf(fname, "%s_B%d.fil", fb_basefilename, b);
+          sprintf(fname, "%s.B%d.fil", fb_basefilename, b);
         }
         hashpipe_info(thread_name, "Opening fil file '%s'", fname);
 
@@ -621,8 +624,10 @@ static void *run(hashpipe_thread_args_t * args)
       printf("CBF: Writing headers to filterbank files! \n");
       for(int b = 0; b < nbeams; b++){
         fb_hdr.ibeam =  b;
-        fb_hdr.src_raj = ra_data[b];
-        fb_hdr.src_dej = dec_data[b];
+        if(sim_flag == 0){
+          fb_hdr.src_raj = ra_data[b];
+          fb_hdr.src_dej = dec_data[b];
+        }
         //fb_hdr.source_name = ;
         fb_fd_write_header(fdraw[b], &fb_hdr);
       }
