@@ -7,6 +7,9 @@
 #     input  - input dir
 #     output - (optional)
 #
+# If mode is cbf, then no input and output are necessary
+# Input and output will be provided by the status buffer
+
 
 hpguppi_plugin=../src/.libs/hpguppi_proc.so
 
@@ -47,24 +50,27 @@ then
 	out_thread=hpguppi_coherent_bf_thread
     fi
 
-    if [ -z "$2" ] || [ -z "$3" ]
+    if [ "$1" = 'cp' ] || [ "$1" = 'fil' ]
     then
-        echo Input/Output dir not provided.
-        echo Usage: readraw_init.sh [mode] [input] [output]
-        echo Exiting...
-        exit
-    else
-        # Path to file in first argument of execution
-        path_to_raw_files=$2
+        if [ -z "$2" ] || [ -z "$3" ]
+        then
+            echo Input/Output dir not provided.
+            echo Usage: readraw_init.sh [mode] [input] [output]
+            echo Exiting...
+            exit
+        else
+            # Path to file in first argument of execution    
+            path_to_raw_files=$2
 
-        # Finds the first RAW file in the directory (which has file number before the file extension "0000.raw")
-        first_file=$(find $path_to_raw_files -type f -iname "*0000.raw")
+            # Finds the first RAW file in the directory (which has file number before the file extension "0000.raw")
+            first_file=$(find $path_to_raw_files -type f -iname "*0000.raw")
 
-        # Removes everything after the first period in the RAW file name
-        basefile=${first_file%%.*}
-        #basefile=$2
-        outdir=$3
-        shift
+            # Removes everything after the first period in the RAW file name
+            basefile=${first_file%%.*}
+            #basefile=$2
+            outdir=$3
+            shift
+        fi
     fi
 else
     echo 'Unsupported mode. Choose between "readonly", "cp", "fil", "cbf".'
@@ -73,12 +79,18 @@ else
 fi
 
 #-------------------------------------------
-echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
- -o BASEFILE=${basefile} \
- -o OUTDIR=${outdir}
+if [ "$1" = 'cbf' ]
+then
+    echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+
+    hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+else
+    echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+     -o BASEFILE=${basefile} \
+     -o OUTDIR=${outdir}
 
 
-hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
- -o BASEFILE=${basefile} \
- -o OUTDIR=${outdir}
-
+    hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+     -o BASEFILE=${basefile} \
+     -o OUTDIR=${outdir}
+fi

@@ -181,8 +181,8 @@ static void *run(hashpipe_thread_args_t * args)
   double block_midtime = 0;
   double time_array_midpoint = 0;
 
-  hid_t file_id, npol_id, nbeams_id, obs_id, cal_all_id, delays_id, time_array_id, ra_id, dec_id, sid1, sid2, sid4, sid5, sid6, obs_type, native_obs_type; // identifiers //
-  herr_t status, cal_all_elements, delays_elements, time_array_elements, ra_elements, dec_elements;
+  hid_t file_id, npol_id, nbeams_id, obs_id, src_id, cal_all_id, delays_id, time_array_id, ra_id, dec_id, sid1, sid2, sid4, sid5, sid6, src_dspace_id, obs_type, native_obs_type, native_src_type; // identifiers //
+  herr_t status, cal_all_elements, delays_elements, time_array_elements, ra_elements, dec_elements, src_elements;
 
   //typedef struct complex_t{
   //  float re;
@@ -202,6 +202,7 @@ static void *run(hashpipe_thread_args_t * args)
   uint64_t nbeams;
   uint64_t npol;
   int hdf5_obsidsize;
+  hvl_t *src_names_str;
 
   int time_array_idx = 0; // time_array index
 
@@ -275,6 +276,8 @@ static void *run(hashpipe_thread_args_t * args)
         for(int b = 0; b < nbeams; b++){
 	  // If file open, close it
           if(fdraw[b] != -1) {
+            // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
+             
             // Close file
             close(fdraw[b]);
             // Reset fdraw, got_packet_0, filenum, block_count
@@ -370,12 +373,6 @@ static void *run(hashpipe_thread_args_t * args)
       printf("CBF: coarse_chan_band = %lf Hz \n", coarse_chan_band);
       printf("CBF: chan_bw = %lf MHz \n", chan_bw);
 
-      // Set specified path to write filterbank files
-      strcpy(fb_basefilename, outdir);
-      strcat(fb_basefilename, "/");
-      strcat(fb_basefilename, raw_basefilename);
-      printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
-
       if(sim_flag == 0){
         hashpipe_status_lock_safe(st);
         hgets(st->buf, "BFRDIR", sizeof(bfrdir), bfrdir);
@@ -409,6 +406,30 @@ static void *run(hashpipe_thread_args_t * args)
         printf("CBF: obsid = %s \n", hdf5_obsid);
         // Close the dataset. //
         status = H5Dclose(obs_id);
+        // -----------------------------------------------//
+
+        // -------------Read source names----------------- //
+        // Open an existing dataset. //
+        src_id = H5Dopen(file_id, "/beaminfo/src_names", H5P_DEFAULT);
+        // Get dataspace ID //
+        src_dspace_id = H5Dget_space(src_id);
+        // Gets the number of elements in the data set //
+        src_elements=H5Sget_simple_extent_npoints(src_dspace_id);
+        printf("Number of elements in the src_names dataset is : %d\n", src_elements);
+        // Create src_names data type //
+        native_src_type = H5Tvlen_create(H5T_NATIVE_CHAR);
+        // Allocate memory to string array
+        src_names_str = malloc((int)src_elements*sizeof(hvl_t));
+        // Read the dataset. //
+        status = H5Dread(src_id, native_src_type, H5S_ALL, H5S_ALL, H5P_DEFAULT, src_names_str);
+        for(int i=0; i<src_elements; i++) {
+          printf("%d: len: %d, str is: %s\n", i, (int)src_names_str[i].len, (char *)src_names_str[i].p);
+        }
+        // Free the memory and reset each element in the array //
+        //status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
+
+        // Close the dataset //
+        status = H5Dclose(src_id);
         // -----------------------------------------------//
 
         // Need to initialize these obsid variables
@@ -506,6 +527,11 @@ static void *run(hashpipe_thread_args_t * args)
         nbeams = 1; // Generate one filterbank file with the boresight beam
         npol = 2; // Number of polarizations needs to be specified
         printf("Number of beams = %lu, just the boresight beam \n", nbeams);
+        // Set specified path to write filterbank files
+        strcpy(fb_basefilename, outdir);
+        strcat(fb_basefilename, "/");
+        strcat(fb_basefilename, raw_basefilename);
+        printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
       }
 
       // Number of time samples per block in a RAW file
@@ -586,11 +612,23 @@ static void *run(hashpipe_thread_args_t * args)
       for(int b = 0; b < nbeams; b++){
         if(b >= 0 && b < 10) {
           if(sim_flag == 0){
-	    sprintf(fname, "%s.B0%d.fil",  fb_basefilename, b);
+            // Set specified path to write filterbank files
+            strcpy(fb_basefilename, outdir);
+            strcat(fb_basefilename, "/");
+            strcat(fb_basefilename, (char *)src_names_str[b].p);
+            printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
+
+            sprintf(fname, "%s.B0%d.fil",  fb_basefilename, b);
           }else if(sim_flag == 1){
             sprintf(fname, "%s.B0.fil",  fb_basefilename);
           }
         }else{
+          // Set specified path to write filterbank files
+          strcpy(fb_basefilename, outdir);
+          strcat(fb_basefilename, "/");
+          strcat(fb_basefilename, (char *)src_names_str[b].p);
+          printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
+
           sprintf(fname, "%s.B%d.fil", fb_basefilename, b);
         }
         hashpipe_info(thread_name, "Opening fil file '%s'", fname);
@@ -627,8 +665,9 @@ static void *run(hashpipe_thread_args_t * args)
         if(sim_flag == 0){
           fb_hdr.src_raj = ra_data[b];
           fb_hdr.src_dej = dec_data[b];
+          strncpy(fb_hdr.source_name, (char *)src_names_str[b].p, 80);
+          fb_hdr.source_name[80] = '\0';
         }
-        //fb_hdr.source_name = ;
         fb_fd_write_header(fdraw[b], &fb_hdr);
       }
     }
