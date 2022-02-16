@@ -139,9 +139,11 @@ static void *run(hashpipe_thread_args_t * args)
   char src_name[200];
   uint64_t stt_imjd = 0;
   uint64_t stt_smjd = 0;
-  //char character = '/';
-  //char *char_offset; 
-  //long int slash_pos;
+  char character = '_';
+  char *char_offset;
+  long int last_underscore_pos;
+  char base_src[200];
+  char base_no_src[200];
   char raw_basefilename[200];
   char raw_filename[200];
   char prev_basefilename[200];
@@ -521,12 +523,34 @@ static void *run(hashpipe_thread_args_t * args)
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
         tmp_coefficients = generate_coefficients(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, (int)schan, n_chan_per_node, nants);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
+
+        // Get basefilename with no source name
+        // strrchr() finds the last occurence of the specified character
+        char_offset = strrchr(raw_basefilename, character);
+        last_underscore_pos = char_offset-raw_basefilename;
+        printf("CBF: The last position of %c is %ld \n", character, last_underscore_pos);
+
+        // Get file name with source name
+        memcpy(base_src, &raw_basefilename[0], last_underscore_pos);
+        base_src[last_underscore_pos] = '\0';
+        printf("CBF: File name with source name: %s \n", base_src);
+
+        // Get basefilename with source name
+        // strrchr() finds the last occurence of the specified character
+        char_offset = strrchr(base_src, character);
+        last_underscore_pos = char_offset-base_src;
+        printf("CBF: The last position of %c is %ld \n", character, last_underscore_pos);
+
+        // Get file name with no source name
+        memcpy(base_no_src, &base_src[0], last_underscore_pos+1);
+        base_no_src[last_underscore_pos+1] = '\0';
+        printf("CBF: File name with no source name: %s \n", base_no_src);
       }
 
       if(sim_flag == 1){
         nbeams = 1; // Generate one filterbank file with the boresight beam
         npol = 2; // Number of polarizations needs to be specified
-        printf("Number of beams = %lu, just the boresight beam \n", nbeams);
+        printf("CBF: Number of beams = %lu, just the boresight beam \n", nbeams);
         // Set specified path to write filterbank files
         strcpy(fb_basefilename, outdir);
         strcat(fb_basefilename, "/");
@@ -615,6 +639,7 @@ static void *run(hashpipe_thread_args_t * args)
             // Set specified path to write filterbank files
             strcpy(fb_basefilename, outdir);
             strcat(fb_basefilename, "/");
+            strcat(fb_basefilename, base_no_src);
             strcat(fb_basefilename, (char *)src_names_str[b].p);
             printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
@@ -626,6 +651,7 @@ static void *run(hashpipe_thread_args_t * args)
           // Set specified path to write filterbank files
           strcpy(fb_basefilename, outdir);
           strcat(fb_basefilename, "/");
+          strcat(fb_basefilename, base_no_src);
           strcat(fb_basefilename, (char *)src_names_str[b].p);
           printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
