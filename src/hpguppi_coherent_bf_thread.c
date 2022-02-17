@@ -134,6 +134,8 @@ static void *run(hashpipe_thread_args_t * args)
   double obsfreq;
   char fb_basefilename[200];
   char hdf5_basefilename[200];
+  char coeff_basefilename[200];
+  char coeff_fname[256];
   char outdir[200];
   char bfrdir[200];
   char src_name[200];
@@ -203,10 +205,12 @@ static void *run(hashpipe_thread_args_t * args)
   double *dec_data;
   uint64_t nbeams;
   uint64_t npol;
-  int hdf5_obsidsize;
   hvl_t *src_names_str;
+  int hdf5_obsidsize;
 
   int time_array_idx = 0; // time_array index
+  FILE* coeffptr;
+  int coeff_flag = 0 ;
 
   int a = 34; // Antenna index
   int b = 1;  // Beam index
@@ -275,11 +279,17 @@ static void *run(hashpipe_thread_args_t * args)
       wait_count += 1;
       if(wait_count == 50){
         wait_count = 0;
+        coeff_flag = 0;
+        // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
+        free(cal_all_data);
+        free(delays_data);
+        free(time_array_data);
+        free(ra_data);
+        free(dec_data);
+        status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
         for(int b = 0; b < nbeams; b++){
 	  // If file open, close it
           if(fdraw[b] != -1) {
-            // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
-             
             // Close file
             close(fdraw[b]);
             // Reset fdraw, got_packet_0, filenum, block_count
@@ -598,6 +608,22 @@ static void *run(hashpipe_thread_args_t * args)
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
         tmp_coefficients = generate_coefficients(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, (int)schan, n_chan_per_node, nants);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
+
+        // Write coefficients to binary file for analysis with CASA
+        if((time_array_idx == 15) && (coeff_flag == 0)){
+          coeff_flag = 1; // Only necessary to do once in scan
+          strcpy(coeff_basefilename, outdir);
+          strcat(coeff_basefilename, "/");
+          strcat(coeff_basefilename, raw_basefilename);
+          printf("CBF: Beamformer coefficient file name with path and no extension yet: %s \n", coeff_basefilename);
+
+          sprintf(coeff_fname, "%s.coeff.bin",  coeff_basefilename);
+          coeffptr = fopen(coeff_fname,"wb");
+
+          fwrite(bf_coefficients, sizeof(float), N_COEFF, coeffptr);
+          
+          fclose(coeffptr);
+        } 
        
       }
     }
