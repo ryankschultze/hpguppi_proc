@@ -81,9 +81,28 @@ fi
 #-------------------------------------------
 if [ "$1" = 'cbf' ]
 then
-    echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+    if [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] || [ -z "$5" ]
+    then
+        echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
 
-    hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+        hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+    else
+        inputdir=$2
+        rawfile=$3
+        bfrdir=$4
+        outdir=$5
+        echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+         -o INPUTDIR=${inputdir} \
+         -o RAWFILE=${rawfile} \
+         -o BFRDIR=${bfrdir} \
+         -o OUTDIR=${outdir}
+
+        hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+         -o INPUTDIR=${inputdir} \
+         -o RAWFILE=${rawfile} \
+         -o BFRDIR=${bfrdir} \
+         -o OUTDIR=${outdir}
+    fi
 else
     echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
      -o BASEFILE=${basefile} \
