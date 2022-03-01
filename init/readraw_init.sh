@@ -81,12 +81,41 @@ fi
 #-------------------------------------------
 if [ "$1" = 'cbf' ]
 then
-    if [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] || [ -z "$5" ]
+    if [ $# -eq 2 ]
     then
+        inputdir=$2
         echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+         -o INPUTDIR=${inputdir}
 
         hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
-    else
+         -o INPUTDIR=${inputdir}
+    elif [ $# -eq 3 ]
+    then
+        inputdir=$2
+        rawfile=$3
+        echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+         -o INPUTDIR=${inputdir} \
+         -o RAWFILE=${rawfile}
+
+        hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+         -o INPUTDIR=${inputdir} \
+         -o RAWFILE=${rawfile}
+    elif [ $# -eq 4 ]
+    then
+        inputdir=$2
+        rawfile=$3
+        bfrdir=$4
+        echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+         -o INPUTDIR=${inputdir} \
+         -o RAWFILE=${rawfile} \
+         -o BFRDIR=${bfrdir}
+
+        hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
+         -o INPUTDIR=${inputdir} \
+         -o RAWFILE=${rawfile} \
+         -o BFRDIR=${bfrdir}
+    elif [ $# -eq 5 ]
+    then
         inputdir=$2
         rawfile=$3
         bfrdir=$4
@@ -102,14 +131,13 @@ then
          -o RAWFILE=${rawfile} \
          -o BFRDIR=${bfrdir} \
          -o OUTDIR=${outdir}
+    else
+        echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread
+
+        hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread
     fi
 else
-    echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
-     -o BASEFILE=${basefile} \
-     -o OUTDIR=${outdir}
-
-
-    hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
-     -o BASEFILE=${basefile} \
-     -o OUTDIR=${outdir}
+    echo "No mode chosen."
+    echo "Exiting ..."
+    exit
 fi
