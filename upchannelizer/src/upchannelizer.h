@@ -33,11 +33,11 @@
 #define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_STI)               // Size of beamformer output after abs()^2 and short time integration
 // For cuFFT
 #define BATCHES(Nf)     Nf*N_POL*N_ANT
-#define N_POINT(Nt)     Nt/N_TIME_STI
-#define ISTRIDE(Nf,Nw)  Nf*Nw*N_POL*N_ANT
-#define IDIST           1
-#define OSTRIDE(Nw)     Nw*N_POL*N_ANT
-#define ODIST           1   
+//#define N_POINT(Nt)     Nt/N_TIME_STI
+//#define ISTRIDE(Nf,Nw)  Nf*Nw*N_POL*N_ANT
+//#define IDIST           1
+//#define OSTRIDE(Nw)     Nw*N_POL*N_ANT
+//#define ODIST           1   
 
 #ifndef min
 #define min(a,b) ((a < b) ? a : b)
@@ -55,10 +55,11 @@
 // f - fine channel frequency index
 // a - antenna index
 // b - beam index
-#define data_in_idx(p, w, t, c, a, Nw, Nt, Nc)     (p + N_POL*t + Nt*N_POL*w + Nw*Nt*N_POL*c + Nc*Nw*Nt*N_POL*a)
-#define data_tr_idx(a, p, w, c, t, Nw, Nc)         (a + N_ANT*p + N_POL*N_ANT*w + Nw*N_POL*N_ANT*c + Nc*Nw*N_POL*N_ANT*t)
+
+#define data_in_idx(p, w, t, c, a, Np, Nw, Nt, Nc)     (p + Np*t + Nt*Np*w + Nw*Nt*Np*c + Nc*Nw*Nt*Np*a)
+#define data_tr_idx(a, p, w, c, t, Np, Nw, Nc)         (a + N_ANT*p + Np*N_ANT*w + Nw*Np*N_ANT*c + Nc*Nw*Np*N_ANT*t)
 // The "Nf" below is equal in value to "Nt*Nc" that is the dimension of "t" since this is the number of FFT points muliplied by the number of coarse channels
-#define data_fft_idx(a, p, w, f, Nw)               (a + N_ANT*p + N_POL*N_ANT*w + Nw*N_POL*N_ANT*f)
+#define data_fft_idx(a, p, w, f, Np, Nw)               (a + N_ANT*p + Np*N_ANT*w + Nw*Np*N_ANT*f)
 
 #ifdef __cplusplus
 extern "C" {
@@ -70,7 +71,7 @@ void input_data_pin(signed char * data_in_pin);
 void output_data_pin(float * data_out_pin);
 void unregister_data(void * data_unregister);
 void Cleanup_FFT();
-cuComplex* run_FFT(signed char* data_in, int n_chan, int nt); // Run beamformer
+cuComplex* run_FFT(signed char* data_in, int n_pol, int n_chan, int nt); // Run FFT
 #ifdef __cplusplus
 }
 #endif

@@ -20,7 +20,7 @@ using namespace std;
 
 // Perform transpose on the data and convert to floats
 __global__
-void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_chan, int n_win, int n_samp);
+void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_win, int n_samp);
 
 // Perform beamforming operation
 __global__
@@ -87,19 +87,19 @@ void set_to_zero(){
 
 // Perform transpose on the data and convert to floats
 __global__
-void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_chan, int n_win, int n_samp) {
+void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_win, int n_samp) {
 	int a = threadIdx.x; // Antenna index
 	int p = threadIdx.y; // Polarization index
 	int c = blockIdx.y;  // Coarse channel index
-	int w = blockIdx.x;  // Time sample index
-        int t = blockIdx.z;  // Time window index
+	int w = blockIdx.x;  // Time window index
+        int t = blockIdx.z;  // Time sample index
 
 	int n_freq_streams = n_chan/N_STREAMS;
 
 	// If the input data is not float e.g. signed char, just multiply it by '1.0f' to convert it to a float
 	if(f < n_freq_streams){
-		int h_in = data_in_idx(p, w, t, (c + offset), a, n_win, n_samp, n_chan); // data_in_idx(p, t, (f + offset), a, nt, n_chan);
-		int h_tr = data_tr_idx(a, p, w, (c + offset), t, n_win, n_chan); // data_tr_idx(a, p, (f + offset), t, n_chan);
+		int h_in = data_in_idx(p, w, t, (c + offset), a, n_pol, n_win, n_samp, n_chan); // data_in_idx(p, t, (f + offset), a, nt, n_chan);
+		int h_tr = data_tr_idx(a, p, w, (c + offset), t, n_pol, n_win, n_chan); // data_tr_idx(a, p, (f + offset), t, n_chan);
 
 		data_tra[h_tr].x = data_in[2*h_in]*1.0f;
 		data_tra[h_tr].y = data_in[2*h_in + 1]*1.0f;
@@ -107,6 +107,24 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 
 	return;
 }
+
+
+// Perform FFT
+cuComplex* run_FFT(signed char* data_in, int n_pol, int n_chan, int nt){
+        cufftHandle plan;
+
+	// Setup the cuFFT plan
+    	cufftPlan1d(&plan, N, CUFFT_C2C, 1);
+    	// Allocate device memory
+    	cudaMalloc((void **)&dComplexSamples, sizeof(cufftComplex) * N);
+    	// Transfer inputs into device memory
+    	cudaMemcpy(dComplexSamples, complexSamples, sizeof(cufftComplex) * N, cudaMemcpyHostToDevice);
+    	// Execute a complex-to-complex 1D FFT
+    	cufftExecC2C(plan, dComplexSamples, dComplexSamples, CUFFT_FORWARD);
+    	// Retrieve the results into host memory
+    	cudaMemcpy(complexFreq, dComplexSamples, sizeof(cufftComplex) * N, cudaMemcpyDeviceToHost);
+}
+
 
 // Perform beamforming operation
 __global__
