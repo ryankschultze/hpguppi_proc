@@ -200,7 +200,6 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 			for (int f = 0; f < n_chan; f++) {
 				for (int a = 0; a < N_ANT; a++) {
 					if(a < N_REAL_ANT){
-                                                // data_in_idx(p, w, t, c, a, Np, Nw, Nt, Nc)
 						// Requantize from doubles/floats to signed chars with a range from -128 to 127
 						// X polarization
 						data_sim[2 * data_in_idx(0, 0, t, f, a, n_pol, 1, nt, n_chan)] = (signed char)((((cos(2 * PI * freq * t*0.001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
