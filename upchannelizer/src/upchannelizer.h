@@ -32,12 +32,11 @@
 //#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_TIME)              // Size of beamformer output after abs()^2
 #define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_STI)               // Size of beamformer output after abs()^2 and short time integration
 // For cuFFT
-#define BATCHES(Nf)     Nf*N_POL*N_ANT
-//#define N_POINT(Nt)     Nt/N_TIME_STI
-//#define ISTRIDE(Nf,Nw)  Nf*Nw*N_POL*N_ANT
-//#define IDIST           1
-//#define OSTRIDE(Nw)     Nw*N_POL*N_ANT
-//#define ODIST           1   
+#define BATCHES(Nf)       Nf*N_POL*N_ANT
+//#define ISTRIDE(Nf,Nt,Np) Nf*Nt*Np*N_ANT
+//#define IDIST             1
+//#define OSTRIDE(Nw,Np)    Nw*Np*N_ANT
+//#define ODIST             1
 
 #ifndef min
 #define min(a,b) ((a < b) ? a : b)
@@ -65,13 +64,10 @@
 extern "C" {
 #endif
 void init_FFT(); // Allocate memory to all arrays 
-void set_to_zero(); // Set arrays to zero after a block is processed
-signed char* simulate_data(int n_chan, int nt);
-void input_data_pin(signed char * data_in_pin);
-void output_data_pin(float * data_out_pin);
-void unregister_data(void * data_unregister);
+signed char* simulate_data(int n_pol, int n_chan, int nt);
 void Cleanup_FFT();
-cuComplex* run_FFT(signed char* data_in, int n_pol, int n_chan, int nt); // Run FFT
+void upchannelize(cuComplex* data_tra, int n_pol, int n_chan, int n_samp); // Upchannelization
+float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_samp); // Run FFT
 #ifdef __cplusplus
 }
 #endif
