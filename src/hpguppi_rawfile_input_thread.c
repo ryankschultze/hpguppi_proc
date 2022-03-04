@@ -34,6 +34,7 @@ int get_header_size(int fdin, char * header_buf, size_t len)
 {
     int rv;
     int i=0;
+    char header_reset[MAX_HDR_SIZE];
     rv = read(fdin, header_buf, MAX_HDR_SIZE);
     if (rv == -1) {
         hashpipe_error("hpguppi_rawfile_input_thread", "error reading file");
@@ -47,6 +48,9 @@ int get_header_size(int fdin, char * header_buf, size_t len)
                 break;
             }
         }
+    }else if(rv == 0){ // End of file has been reached
+        // Reinitialize header buffer so it doesn't retain the same header info as the block that has been read
+        memcpy(header_buf, &header_reset, MAX_HDR_SIZE);
     }
     return i;
 }
@@ -92,6 +96,7 @@ int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t len)
     // Go to start of next block
     lseek(fdin, blocsize, SEEK_CUR);
 
+    // I don't know what the next block's header size is and I shouldn't make assumptions so read the max header size and offset back based off that
     rv = read(fdin, header_buf, MAX_HDR_SIZE);
     if (rv == -1) {
         hashpipe_error("hpguppi_rawfile_input_thread", "error reading file");
@@ -104,9 +109,12 @@ int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t len)
                 break;
             }
         }
+        // Reset to the previous block
+        lseek(fdin,-1*(blocsize+MAX_HDR_SIZE),SEEK_CUR);
+    }else if(rv == 0){ // End of file has been reached
+        // Reset to the current packet's payload
+        lseek(fdin, -1*blocsize, SEEK_CUR);
     }
-    // Reset to the previous block
-    lseek(fdin,-1*(blocsize+MAX_HDR_SIZE),SEEK_CUR);
     return pktidx;
 }
 
@@ -349,6 +357,10 @@ static void *run(hashpipe_thread_args_t * args)
             //printf("RAW INPUT: directio = hpguppi_read_directio_mode(header); \n");
             directio = hpguppi_read_directio_mode(header);
 
+#if VERBOSE
+            printf("RAW INPUT: headersize = %d, directio = %d\n", headersize, directio);
+#endif
+
             // Adjust length for any padding required for DirectIO
             if(directio) {
                 // Round up to next multiple of 512
@@ -412,7 +424,7 @@ static void *run(hashpipe_thread_args_t * args)
 #endif
 	    if(sim_flag == 0){
                 read_blocsize = read(fdin, ptr, blocsize);
-                if(block_count == 0){
+                if(block_count >= 0 && (block_count <= 5)){
                     printf("RAW INPUT: Number of bytes read in read(): %zd \n", read_blocsize);
                 }
 #if VERBOSE

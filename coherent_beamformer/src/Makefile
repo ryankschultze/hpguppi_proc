@@ -12,8 +12,10 @@ CUDA_LIBDIR ?= $(CUDA_DIR)/lib
 endif
 
 #Don't install in /usr/local yet
-bflibdir ?= /home/mruzinda/hpguppi_proc/lib
-bfincludedir ?= /home/mruzinda/hpguppi_proc/include
+#Path to repo lib and include
+repo_prefix ?= ../..
+bflibdir ?= $(repo_prefix)/lib
+bfincludedir ?= $(repo_prefix)/include
 
 #On blc03 with NVIDIA RTX 2080
 CUDA_ARCH ?= "-gencode=arch=compute_75,code=sm_75"

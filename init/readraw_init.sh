@@ -92,45 +92,45 @@ then
     elif [ $# -eq 3 ]
     then
         inputdir=$2
-        rawfile=$3
+        bfrdir=$3
         echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
-         -o RAWFILE=${rawfile}
+         -o BFRDIR=${bfrdir} \
 
         hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
-         -o RAWFILE=${rawfile}
+         -o BFRDIR=${bfrdir}
     elif [ $# -eq 4 ]
     then
         inputdir=$2
-        rawfile=$3
-        bfrdir=$4
+        bfrdir=$3
+        outdir=$4
         echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
-         -o RAWFILE=${rawfile} \
-         -o BFRDIR=${bfrdir}
+         -o BFRDIR=${bfrdir} \
+         -o OUTDIR=${outdir} \
 
         hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
-         -o RAWFILE=${rawfile} \
-         -o BFRDIR=${bfrdir}
+         -o BFRDIR=${bfrdir} \
+         -o OUTDIR=${outdir} \
     elif [ $# -eq 5 ]
     then
         inputdir=$2
-        rawfile=$3
-        bfrdir=$4
-        outdir=$5
+        bfrdir=$3
+        outdir=$4
+        rawfile=$5
         echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
-         -o RAWFILE=${rawfile} \
          -o BFRDIR=${bfrdir} \
-         -o OUTDIR=${outdir}
+         -o OUTDIR=${outdir} \
+         -o RAWFILE=${rawfile}
 
         hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
-         -o RAWFILE=${rawfile} \
          -o BFRDIR=${bfrdir} \
-         -o OUTDIR=${outdir}
+         -o OUTDIR=${outdir} \
+         -o RAWFILE=${rawfile}
     else
         echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread
 

@@ -3,9 +3,9 @@ AC_DEFUN([AX_CHECK_CBF],
 [AC_PREREQ([2.65])dnl
 AC_ARG_WITH([coherent_beamformer],
             AC_HELP_STRING([--with-coherent_beamformer=DIR],
-                           [Location of CBF files (/home/mruzinda/hpguppi_proc)]),
+                           [Location of CBF files (../..)]),
             [CBFDIR="$withval"],
-            [CBFDIR=/home/mruzinda/hpguppi_proc])
+            [CBFDIR=../..])
 
 orig_LDFLAGS="${LDFLAGS}"
 LDFLAGS="${orig_LDFLAGS} -L${CBFDIR}/lib"
