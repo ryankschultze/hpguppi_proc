@@ -95,7 +95,7 @@ then
         bfrdir=$3
         echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
-         -o BFRDIR=${bfrdir} \
+         -o BFRDIR=${bfrdir} 
 
         hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
@@ -108,12 +108,12 @@ then
         echo "Run Command:" hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
          -o BFRDIR=${bfrdir} \
-         -o OUTDIR=${outdir} \
+         -o OUTDIR=${outdir}
 
         hashpipe -p ${hpguppi_plugin:-hpguppi_proc} $net_thread $out_thread \
          -o INPUTDIR=${inputdir} \
          -o BFRDIR=${bfrdir} \
-         -o OUTDIR=${outdir} \
+         -o OUTDIR=${outdir}
     elif [ $# -eq 5 ]
     then
         inputdir=$2

@@ -584,6 +584,22 @@ static void *run(hashpipe_thread_args_t * args)
     }
 
     if(sim_flag == 0){
+      // Write coefficients to binary file for analysis with CASA
+      if((time_array_idx == 0)  && (coeff_flag == 0)){
+        strcpy(coeff_basefilename, outdir);
+        strcat(coeff_basefilename, "/");
+        strcat(coeff_basefilename, raw_basefilename);
+        printf("CBF: Beamformer coefficient file name with path and no extension yet: %s \n", coeff_basefilename);
+
+        sprintf(coeff_fname, "%s.coeff.start.bin",  coeff_basefilename);
+
+        coeffptr = fopen(coeff_fname,"wb");
+
+        fwrite(bf_coefficients, sizeof(float), N_COEFF, coeffptr);
+         
+        fclose(coeffptr);
+      } 
+
       // Compute unix time in the middle of the block and avg. value current and next time_array value for comparison
       // Updata coefficient if unix time in the middle of the block is greater than avg. of the two time array values
       pktidx_time = synctime + (pktidx*tbin*n_samp/piperblk);
@@ -610,14 +626,11 @@ static void *run(hashpipe_thread_args_t * args)
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
 
         // Write coefficients to binary file for analysis with CASA
-        if((time_array_idx == 15) && (coeff_flag == 0)){
+        if((time_array_idx == 15)  && (coeff_flag == 0)){
           coeff_flag = 1; // Only necessary to do once in scan
-          strcpy(coeff_basefilename, outdir);
-          strcat(coeff_basefilename, "/");
-          strcat(coeff_basefilename, raw_basefilename);
-          printf("CBF: Beamformer coefficient file name with path and no extension yet: %s \n", coeff_basefilename);
 
-          sprintf(coeff_fname, "%s.coeff.bin",  coeff_basefilename);
+          sprintf(coeff_fname, "%s.coeff.middle.bin",  coeff_basefilename);
+
           coeffptr = fopen(coeff_fname,"wb");
 
           fwrite(bf_coefficients, sizeof(float), N_COEFF, coeffptr);
