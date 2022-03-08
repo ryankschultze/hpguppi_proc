@@ -467,9 +467,9 @@ static void *run(hashpipe_thread_args_t * args)
         nbeams_id = H5Dopen(file_id, "/diminfo/nbeams", H5P_DEFAULT);
 
         // Get dataspace ID //
-        sid1 =  H5Dget_space(cal_all_id);
-        sid2 =  H5Dget_space(delays_id);
-        sid4 =  H5Dget_space(time_array_id);
+        sid1 = H5Dget_space(cal_all_id);
+        sid2 = H5Dget_space(delays_id);
+        sid4 = H5Dget_space(time_array_id);
         sid5 = H5Dget_space(ra_id);
         sid6 = H5Dget_space(dec_id);
   

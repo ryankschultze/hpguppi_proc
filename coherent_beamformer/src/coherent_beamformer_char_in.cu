@@ -144,8 +144,8 @@ void coherent_beamformer(cuComplex* input_data, float* coeff, float* output_data
 			}
 			if (a == 0) {
 				int h1 = coh_bf_idx(p, b, (f + offset), t, n_pol, n_beam, n_chan); // coh_bf_idx(p, b, f, t, Np, Nb, Nf)
-				output_data[2 * h1] += reduced_mul[0].x;
-				output_data[2 * h1 + 1] += reduced_mul[0].y;
+				output_data[2 * h1] = reduced_mul[0].x;
+				output_data[2 * h1 + 1] = reduced_mul[0].y;
 			}
 		}
 	}
@@ -403,10 +403,11 @@ signed char* simulate_data(int n_pol, int n_chan, int n_samp) {
 	'sim_flag' is a flag that indicates the kind of data that is simulated.
 	sim_flag = 0 -> Ones
 	sim_flag = 1 -> Repeating sequence of 1 to 64
-	sim_flag = 2 -> Sequence of 1 to 64 placed in a particular bin (bin 6 for now)
+	sim_flag = 2 -> Sequence of 1 to 64 placed in a particular bin (bin 3 and 6 for now)
 	sim flag = 3 -> Simulated radio source in center beam assuming ULA
+        sim_flag = 4 -> One value at one polarization, one element, one time sample, and one frequency bin
 	*/
-	int sim_flag = 3;
+	int sim_flag = 2;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
 			if(i < (N_REAL_INPUT/2)){
@@ -510,6 +511,9 @@ signed char* simulate_data(int n_pol, int n_chan, int n_samp) {
 			}
 		}
 	}
+        if(sim_flag == 4){
+        	data_sim[2 * data_in_idx(0, 0, 5, 0, n_pol, n_samp, n_chan)] = 1;
+        }
 	return data_sim;
 }
 
@@ -525,7 +529,7 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 	sim_flag = 2 -> Scale each beam by incrementing value in a particular bin (bin 3 and 6 for now). Match simulated data sim_flag = 2
 	sim flag = 3 -> Simulated beams from 58 to 122 degrees. Assuming a ULA.
 	*/
-	int sim_flag = 3;
+	int sim_flag = 0;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (((N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ)) / 2); i++) {
 			coeff_sim[2 * i] = 1;
