@@ -126,6 +126,7 @@ void coherent_beamformer(cuComplex* input_data, float* coeff, float* output_data
                         int w = coeff_idx(a, p, b, f, n_pol, n_beam); // (a, p, b, f, Np, Nb)
 
 			if (a < N_ANT) {
+                                // Conjugated coefficients places the minus operation in the imaginary component
 				reduced_mul[a].x = input_data[i].x * coeff[2*w] + input_data[i].y * coeff[2*w + 1];
 				reduced_mul[a].y = input_data[i].y * coeff[2*w] - input_data[i].x * coeff[2*w + 1];
 			}
@@ -188,15 +189,16 @@ void beamformer_power(float* bf_volt, float* bf_power, int offset, int n_pol, in
 // Compute power of beamformer output (abs()^2)
 __global__
 void beamformer_power_sti(float* bf_volt, float* bf_power, int offset, int n_pol, int n_beam, int n_chan, int n_win) {
-	int f = blockIdx.x;  // Frequency bin index
+	int f = blockIdx.z;  // Frequency bin index
 	int b = blockIdx.y;  // Beam index
-	int s = blockIdx.z;  // STI window index
+	int s = blockIdx.x;  // STI window index
 	int t = threadIdx.x; // Time sample index
 
 	int n_freq_streams = n_chan/N_STREAMS;
 	
-	int xp; // X polarization
-	int yp; // Y polarization
+	int xp = coh_bf_idx(0, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // X polarization
+	int yp = coh_bf_idx(1, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // Y polarization
+        int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
 	float x_pol_pow; // XX*
 	float y_pol_pow; // YY*
 	float beam_power;
@@ -208,7 +210,7 @@ void beamformer_power_sti(float* bf_volt, float* bf_power, int offset, int n_pol
 		if(n_pol == 1){
 			if (t < N_TIME_STI) {
 				// Power = Absolute value squared of output -> r^2 + i^2
-				xp = coh_bf_idx(0, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // X polarization
+				//xp = coh_bf_idx(0, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // X polarization
 
 				x_pol_pow = (bf_volt[2 * xp] * bf_volt[2 * xp]) + (bf_volt[2 * xp + 1] * bf_volt[2 * xp + 1]); // XX*
 
@@ -231,14 +233,14 @@ void beamformer_power_sti(float* bf_volt, float* bf_power, int offset, int n_pol
 	
 			// After reduction is complete, assign each reduced value to appropriate position in output array.
 			if(t == 0){
-				int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
+				//int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
 				bf_power[h] = reduced_array[0]*scale;
 			}
 		}else if(n_pol == 2){
 			if (t < N_TIME_STI) {
 				// Power = Absolute value squared of output -> r^2 + i^2
-				xp = coh_bf_idx(0, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // X polarization
-				yp = coh_bf_idx(1, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // Y polarization
+				//xp = coh_bf_idx(0, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // X polarization
+				//yp = coh_bf_idx(1, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // Y polarization
 
 				x_pol_pow = (bf_volt[2 * xp] * bf_volt[2 * xp]) + (bf_volt[2 * xp + 1] * bf_volt[2 * xp + 1]); // XX*
 				y_pol_pow = (bf_volt[2 * yp] * bf_volt[2 * yp]) + (bf_volt[2 * yp + 1] * bf_volt[2 * yp + 1]); // YY*
@@ -261,7 +263,7 @@ void beamformer_power_sti(float* bf_volt, float* bf_power, int offset, int n_pol
 	
 			// After reduction is complete, assign each reduced value to appropriate position in output array.
 			if(t == 0){
-				int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
+				//int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
 				bf_power[h] = reduced_array[0]*scale;
 			}
 		}
@@ -293,7 +295,9 @@ float* run_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int
 
 	// Output power of beamformer kernel with STI: Specify grid and block dimensions
 	dim3 dimBlock_bf_pow(N_STI_BLOC, 1, 1);
-	dim3 dimGrid_bf_pow(n_chan, n_beam, n_win);
+	dim3 dimGrid_bf_pow(n_win, n_beam, n_chan);
+	//dim3 dimBlock_bf_pow(n_chan, 1, 1);
+	//dim3 dimGrid_bf_pow(n_beam, 1, 1);
 
 	float* d_data_bf = d_data_float;
 	signed char* d_data_in = d_data_char;
@@ -362,7 +366,7 @@ float* run_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int
 	for (int i = 0; i < N_STREAMS; ++i){
 		int offset = i * n_freq_streams;
 		// Compute power of beamformer output (abs()^2)
-		//beamformer_power<<<dimGrid_bf_pow, dimBlock_bf_pow, 0, stream[i]>>>(d_data_bf, d_bf_pow, offset, n_chan);
+		//beamformer_power<<<dimGrid_bf_pow, dimBlock_bf_pow, 0, stream[i]>>>(d_data_bf, d_bf_pow, offset, n_pol, n_beam, n_chan, n_samp);
 		beamformer_power_sti<<<dimGrid_bf_pow, dimBlock_bf_pow, 0, stream[i]>>>(d_data_bf, d_bf_pow, offset, n_pol, n_beam, n_chan, n_win);
 		err_code = cudaGetLastError();
 		if (err_code != cudaSuccess) {
@@ -407,7 +411,7 @@ signed char* simulate_data(int n_pol, int n_chan, int n_samp) {
 	sim flag = 3 -> Simulated radio source in center beam assuming ULA
         sim_flag = 4 -> One value at one polarization, one element, one time sample, and one frequency bin
 	*/
-	int sim_flag = 2;
+	int sim_flag = 3;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
 			if(i < (N_REAL_INPUT/2)){
@@ -512,7 +516,7 @@ signed char* simulate_data(int n_pol, int n_chan, int n_samp) {
 		}
 	}
         if(sim_flag == 4){
-        	data_sim[2 * data_in_idx(0, 0, 5, 0, n_pol, n_samp, n_chan)] = 1;
+        	data_sim[2 * data_in_idx(0, 9, 0, 0, n_pol, n_samp, n_chan)] = 1;
         }
 	return data_sim;
 }
@@ -528,8 +532,9 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 	sim_flag = 1 -> Scale each beam by incrementing value i.e. beam 1 = 1, beam 2 = 2, ..., beam 64 = 64
 	sim_flag = 2 -> Scale each beam by incrementing value in a particular bin (bin 3 and 6 for now). Match simulated data sim_flag = 2
 	sim flag = 3 -> Simulated beams from 58 to 122 degrees. Assuming a ULA.
+        sim_flag = 4 -> One value at one polarization, one element, one beam, and one frequency bin
 	*/
-	int sim_flag = 0;
+	int sim_flag = 3;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (((N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ)) / 2); i++) {
 			coeff_sim[2 * i] = 1;
@@ -604,6 +609,9 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 			}
 		}
 	}
+        if (sim_flag == 4) {
+        	coeff_sim[2 * coeff_idx(0, 0, 0, 0, n_pol, n_beam)] = 1;
+        }
 
 	return coeff_sim;
 }
@@ -824,7 +832,7 @@ int main() {
 
 	printf("Here10!\n");
 
-	for (int ii = 0; ii < ((N_BF_POW*n_beam*n_chan*n_win)/(N_BEAM*MAX_COARSE_FREQ*N_STI)); ii++) { // Write up to the size of the data corresponding to 1k, 4k or 32k mode
+	for (int ii = 0; ii < ((N_BF_POW*n_beam*n_chan*n_win)/(N_BEAM*MAX_COARSE_FREQ*N_TIME)); ii++) { // Write up to the size of the data corresponding to 1k, 4k or 32k mode
 		//fprintf(output_file, "%c\n", output_data[ii]);
 		fprintf(output_file, "%g\n", output_data[ii]);
 	}

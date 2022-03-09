@@ -8,7 +8,7 @@
 #define N_TIME 1024 // 8192 //16384 //1 // 8                   // Number of time samples
 #define N_TIME_STI 8
 #define N_STI N_TIME/N_TIME_STI
-#define N_STI_BLOC 32
+#define N_STI_BLOC N_TIME_STI
 #define N_STREAMS 1                     // Number of CUDA streams
 //#define N_COARSE_FREQ 64 //32               // Number of coarse channels processed at a time
 #define MAX_COARSE_FREQ 512                 // Max number of coarse channels is the number of channels in 32k mode
@@ -29,8 +29,8 @@
 #define DELAY_POLYS   (unsigned long int)(2)                                 // Number of coefficients in polynomial
 #define N_DELAYS      (unsigned long int)(DELAY_POLYS*N_ANT*N_BEAM)          // Size of first order polynomial delay array
 #define N_OUTPUT      (unsigned long int)(2*N_POL*N_BEAM*N_FREQ*N_TIME)      // Size of beamformer output
-//#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_TIME)              // Size of beamformer output after abs()^2
-#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_STI)               // Size of beamformer output after abs()^2 and short time integration
+#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_TIME)              // Size of beamformer output after abs()^2
+//#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_STI)               // Size of beamformer output after abs()^2 and short time integration
 
 #ifndef min
 #define min(a,b) ((a < b) ? a : b)
@@ -54,7 +54,7 @@
 //#define delay_idx(d, a, b, Na)                  (d + DELAY_POLYS*a + DELAY_POLYS*Na*b) // Should be correct indexing
 #define cal_all_idx(a, p, f, Na, Np)            (a + Na*p + Np*Na*f)
 #define delay_idx(a, b, t, Na, Nb)              (a + Na*b + Nb*Na*t)
-#define coh_bf_idx(p, b, f, t, Np, Nb, Nf)      (p + Np*b + Nb*Np*f + Nf*Nb*Np*t)
+#define coh_bf_idx(p, b, f, t, Np, Nb, Nf)      (p + Np*b + Nb*Np*f + Nf*Nb*Np*(t))
 #define pow_bf_nosti_idx(b, f, t, Nf, Nt)       (f + Nf*t + Nf*Nt*b) // Changed to efficiently write each beam to a filterbank file
 #define pow_bf_idx(b, f, s, Nf, Ns)             (f + Nf*s + Nf*Ns*b) // Changed to efficiently write each beam to a filterbank file
 
