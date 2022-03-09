@@ -411,7 +411,7 @@ signed char* simulate_data(int n_pol, int n_chan, int n_samp) {
 	sim flag = 3 -> Simulated radio source in center beam assuming ULA
         sim_flag = 4 -> One value at one polarization, one element, one time sample, and one frequency bin
 	*/
-	int sim_flag = 3;
+	int sim_flag = 4;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
 			if(i < (N_REAL_INPUT/2)){
@@ -534,7 +534,7 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 	sim flag = 3 -> Simulated beams from 58 to 122 degrees. Assuming a ULA.
         sim_flag = 4 -> One value at one polarization, one element, one beam, and one frequency bin
 	*/
-	int sim_flag = 3;
+	int sim_flag = 0;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (((N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ)) / 2); i++) {
 			coeff_sim[2 * i] = 1;
