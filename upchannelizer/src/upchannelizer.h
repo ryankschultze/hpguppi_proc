@@ -4,22 +4,22 @@
 #include <math.h>
 
 
-#define N_POL 2 //2                     // Number of polarizations
-#define N_TIME 1024 // 8192 //16384 //1 // 8                   // Number of time samples
-#define N_TIME_STI 8
-#define N_STI N_TIME/N_TIME_STI
-#define N_STI_BLOC 32
-#define N_STREAMS 1                     // Number of CUDA streams
+#define N_POL (2) //2                     // Number of polarizations
+#define N_TIME (1024) // 8192 //16384 //1 // 8                   // Number of time samples
+#define N_TIME_STI (8)
+#define N_STI (N_TIME/N_TIME_STI)
+#define N_STI_BLOC (32)
+#define N_STREAMS (1)                     // Number of CUDA streams
 //#define N_COARSE_FREQ 64 //32               // Number of coarse channels processed at a time
-#define MAX_COARSE_FREQ 512                 // Max number of coarse channels is the number of channels in 32k mode
-#define N_FINE_FREQ 1 //16384               // Number of fine channels per coarse channel 2^14 = 16384
+#define MAX_COARSE_FREQ (512)                 // Max number of coarse channels is the number of channels in 32k mode
+#define N_FINE_FREQ (1) //16384               // Number of fine channels per coarse channel 2^14 = 16384
 //#define N_FREQ (N_COARSE_FREQ*N_FINE_FREQ) // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
 #define N_FREQ (MAX_COARSE_FREQ*N_FINE_FREQ) // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
 //#define N_FREQ_STREAM (N_FREQ/N_STREAMS) // (N_COARSE_FREQ*N_FINE_FREQ)/N_STREAMS // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
 //#define N_FREQ_STREAM (N_COARSE_FREQ/N_STREAMS) // (N_COARSE_FREQ*N_FINE_FREQ)/N_STREAMS // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
-#define N_ANT 64 // 64                  // Number of possible antennas (64 is also computationally efficient since it is a multiple of 32 which is the size of a warp)
-#define N_REAL_ANT 58                   // Number of antennas transmitting data downstream
-#define N_BEAM 64 // 64                 // Number of beams
+#define N_ANT (64) // 64                  // Number of possible antennas (64 is also computationally efficient since it is a multiple of 32 which is the size of a warp)
+#define N_REAL_ANT (58)                   // Number of antennas transmitting data downstream
+#define N_BEAM (64) // 64                 // Number of beams
 
 // "2" for inphase and quadrature
 #define N_INPUT       (unsigned long int)(2*N_POL*N_TIME*N_FREQ*N_ANT)       // Size of input. Currently, same size as output
@@ -32,11 +32,12 @@
 //#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_TIME)              // Size of beamformer output after abs()^2
 #define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_STI)               // Size of beamformer output after abs()^2 and short time integration
 // For cuFFT
-#define BATCHES(Nf)       Nf*N_POL*N_ANT
-//#define ISTRIDE(Nf,Nt,Np) Nf*Nt*Np*N_ANT
-//#define IDIST             1
-//#define OSTRIDE(Nw,Np)    Nw*Np*N_ANT
-//#define ODIST             1
+#define RANK                (1)
+#define BATCH(Np,Nf,Nw)     (N_ANT)*(Np)*(Nf)*(Nw)
+#define ISTRIDE             (1)
+#define IDIST(Nt)           (Nt)
+#define OSTRIDE             (1)
+#define ODIST(Nt)           (Nt)
 
 #ifndef min
 #define min(a,b) ((a < b) ? a : b)
@@ -55,10 +56,12 @@
 // a - antenna index
 // b - beam index
 
-#define data_in_idx(p, w, t, c, a, Np, Nw, Nt, Nc)     (p + Np*t + Nt*Np*w + Nw*Nt*Np*c + Nc*Nw*Nt*Np*a)
-#define data_tr_idx(a, p, w, c, t, Np, Nw, Nc)         (a + N_ANT*p + Np*N_ANT*w + Nw*Np*N_ANT*c + Nc*Nw*Np*N_ANT*t)
+#define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
+//#define data_tr_idx(a, p, w, c, t, Np, Nw, Nc)               ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(w) + (Nw)*(Np)*(N_ANT)*(c) + (Nc)*(Nw)*(Np)*(N_ANT)*(t))
+#define data_tr_idx(t, a, p, w, c, Nt, Np, Nw)               ((t) + (Nt)*(a) + (N_ANT)*(Nt)*(p) + (Np)*(N_ANT)*(Nt)*(w) + (Nw)*(Np)*(N_ANT)*(Nt)*(c))
+#define data_fft_out_idx(f, a, p, w, c, Np, Nw, Nc, Nf)      ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(w) + (Nw)*(Np)*(N_ANT)*(Nf)*(c))
 // The "Nf" below is equal in value to "Nt*Nc" that is the dimension of "t" since this is the number of FFT points muliplied by the number of coarse channels
-#define data_fft_idx(a, p, w, f, Np, Nw)               (a + N_ANT*p + Np*N_ANT*w + Nw*Np*N_ANT*f)
+#define data_fft_tra_idx(a, p, w, c, f, Np, Nw, Nc)          ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(w) + (Nw)*(Np)*(N_ANT)*(c) + (Nc)(Nw)*(Np)*(N_ANT)*(f))
 
 #ifdef __cplusplus
 extern "C" {

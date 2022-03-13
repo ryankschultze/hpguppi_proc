@@ -18,7 +18,7 @@
 //#define N_FREQ_STREAM (N_FREQ/N_STREAMS) // (N_COARSE_FREQ*N_FINE_FREQ)/N_STREAMS // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
 //#define N_FREQ_STREAM (N_COARSE_FREQ/N_STREAMS) // (N_COARSE_FREQ*N_FINE_FREQ)/N_STREAMS // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
 #define N_ANT (64) // 64                  // Number of possible antennas (64 is also computationally efficient since it is a multiple of 32 which is the size of a warp)
-#define N_REAL_ANT (58)                   // Number of antennas transmitting data downstream
+#define N_REAL_ANT (63)                   // Number of antennas transmitting data downstream
 #define N_BEAM (64) // 64                 // Number of beams
 
 // "2" for inphase and quadrature

@@ -60,36 +60,54 @@ void init_FFT() {
 // Perform transpose on the data and convert to floats
 __global__
 void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_win, int n_samp) {
-	int a = threadIdx.x; // Antenna index
-	int p = threadIdx.y; // Polarization index
-	int c = blockIdx.y;  // Coarse channel index
-	int w = blockIdx.x;  // Time window index
-        int t = blockIdx.z;  // Time sample index
+	//int a = threadIdx.x; // Antenna index
+	//int p = threadIdx.y; // Polarization index
+	//int c = blockIdx.y;  // Coarse channel index
+	//int w = blockIdx.x;  // Time window index
+        //int t = blockIdx.z;  // Time sample index
 
-	// If the input data is not float e.g. signed char, just multiply it by '1.0f' to convert it to a float
-	int h_in = data_in_idx(p, w, t, (c + offset), a, n_pol, n_win, n_samp, n_chan); // data_in_idx(p, t, (f + offset), a, nt, n_chan);
-	int h_tr = data_tr_idx(a, p, w, (c + offset), t, n_pol, n_win, n_chan); // data_tr_idx(a, p, (f + offset), t, n_chan);
+	int t = threadIdx.x; // Time sample index
+	int a = blockIdx.x;  // Antenna index
+	int w = blockIdx.y;  // Time window index
+	int c = blockIdx.z;  // Coarse channel index
+        int p = 0;           // Polarization index
 
-	data_tra[h_tr].x = data_in[2*h_in]*1.0f;
-	data_tra[h_tr].y = data_in[2*h_in + 1]*1.0f;
-	
+	// data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)
+	for(p=0; p<n_pol; p++){
+		// If the input data is not float e.g. signed char, just multiply it by '1.0f' to convert it to a float
+		int h_in = data_in_idx(p, t, w, (c + offset), a, n_pol, n_samp, n_win, n_chan); // data_in_idx(p, t, (f + offset), a, nt, n_chan);
+		int h_tr = data_tr_idx(t, a, p, w, (c + offset), n_samp, n_pol, n_win); // data_tr_idx(a, p, (f + offset), t, n_chan); (t, a, p, w, c, Nt, Np, Nw)
+
+		data_tra[h_tr].x = data_in[2*h_in]*1.0f;
+		data_tra[h_tr].y = data_in[2*h_in + 1]*1.0f;
+	}
 
 	return;
 }
 
 
 // Perform FFT
-void upchannelize(cuComplex* data_tra, int n_pol, int n_chan, int n_win, int n_samp){
+void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int n_samp){
         cufftHandle plan;
 
-        // Number of branches to perform FFT on
-        int n_branches = N_ANT*n_pol*n_chan*n_win;
-
+	int n[RANK] = {n_samp};
 	// Setup the cuFFT plan
-    	cufftPlan1d(&plan, n_samp, CUFFT_C2C, n_branches);
-    	
+	//if (cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan,n_win)) != CUFFT_SUCCESS){
+	//	fprintf(stderr, "CUFFT error: Plan creation failed");
+	//	return;	
+	//}
+
+	// Setup the cuFFT plan	
+	if (cufftPlanMany(&plan, RANK, n, n, ISTRIDE, n_samp, n, OSTRIDE, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan,n_win)) != CUFFT_SUCCESS){
+		fprintf(stderr, "CUFFT error: Plan creation failed");
+		return;	
+	}
+
     	// Execute a complex-to-complex 1D FFT
-    	cufftExecC2C(plan, (cufftComplex *)data_tra, (cufftComplex *)data_tra, CUFFT_FORWARD);
+	if (cufftExecC2C(plan, data_tra, data_tra, CUFFT_FORWARD) != CUFFT_SUCCESS){
+		fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
+		return;	
+	}
 }
 
 // Run FFT
@@ -101,8 +119,11 @@ float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_sam
         int nt = n_win*n_samp;
 
 	// Transpose kernel: Specify grid and block dimensions
-	dim3 dimBlock_transpose(N_ANT, n_pol, 1);
-	dim3 dimGrid_transpose(n_samp, n_chan, n_win);
+	//dim3 dimBlock_transpose(N_ANT, n_pol, 1);
+	//dim3 dimGrid_transpose(n_samp, n_chan, n_win);
+
+	dim3 dimBlock_transpose(n_samp, 1, 1);
+	dim3 dimGrid_transpose(N_ANT, n_win, n_chan);
 
 	signed char* d_data_in = d_data_char;
 	cuComplex* d_data_tra = d_data_comp;
@@ -120,7 +141,7 @@ float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_sam
 	}
 
         // Upchannelize the data
-        upchannelize(d_data_tra, n_pol, n_chan, n_win, n_samp);
+        upchannelize((cufftComplex*)d_data_tra, n_pol, n_chan, n_win, n_samp);
 
         // Copy input data from device to host
         checkCuda(cudaMemcpy(data_out, (float *)d_data_tra, 2*N_ANT*n_pol*nt*n_chan*sizeof(float), cudaMemcpyDeviceToHost));
@@ -200,20 +221,18 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 			for (int f = 0; f < n_chan; f++) {
 				for (int a = 0; a < N_ANT; a++) {
 					if(a < N_REAL_ANT){
-						// Requantize from doubles/floats to signed chars with a range from -128 to 127
+						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
 						// X polarization
-						data_sim[2 * data_in_idx(0, 0, t, f, a, n_pol, 1, nt, n_chan)] = (signed char)((((cos(2 * PI * freq * t*0.001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						data_sim[2 * data_in_idx(0, 0, t, f, a, n_pol, 1, nt, n_chan) + 1] = 0;
+						data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						//data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
 						// Y polarization
-						data_sim[2 * data_in_idx(1, 0, t, f, a, n_pol, 1, nt, n_chan)] = (signed char)((((2*cos(2 * PI * freq * t*0.001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						data_sim[2 * data_in_idx(1, 0, t, f, a, n_pol, 1, nt, n_chan) + 1] = 0;
-					}else{
+						data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						//data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
+
 						// X polarization
-						data_sim[2 * data_in_idx(0, 0, t, f, a, n_pol, 1, nt, n_chan)] = 0;
-						data_sim[2 * data_in_idx(0, 0, t, f, a, n_pol, 1, nt, n_chan) + 1] = 0;
+						//data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan)] = (cos(2 * PI * freq * t*0.000001));
 						// Y polarization
-						data_sim[2 * data_in_idx(1, 0, t, f, a, n_pol, 1, nt, n_chan)] = 0;
-						data_sim[2 * data_in_idx(1, 0, t, f, a, n_pol, 1, nt, n_chan) + 1] = 0; // Make this negative if a different polarization is tested
+						//data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan)] = (cos(2 * PI * freq * t*0.000001));
 					}
 				}
 			}
@@ -233,6 +252,17 @@ void Cleanup_FFT() {
 	}
 }
 
+
+// Testing to see whether input data is as I expect it to be
+float* data_test(signed char *sim_data){
+	float* data_float;
+	data_float = (float*)calloc(N_INPUT, sizeof(float));
+	for (int ii = 0; ii < N_INPUT; ii++) { // Write up to the size of the data corresponding to 1k, 4k or 32k mode
+		data_float[ii] = sim_data[ii]*1.0f;
+	}
+	return data_float;
+}
+
 //Comment out main() function when compiling for hpguppi
 // <----Uncomment here if testing standalone code
 // Test all of the kernels and functions, and write the output to
@@ -250,6 +280,9 @@ int main() {
     	//int n_chan = 512;
         //int nt = 1024;
 
+	//int n_chan = 8;
+        //int nt = 64;
+
         int n_win = N_TIME_STI;
         int n_samp = nt/n_win;
 
@@ -263,10 +296,45 @@ int main() {
 
         printf("After simulate_data() \n");
 
+/*
+	// --------------------- Input data test --------------------- //
+	float* input_test = data_test(sim_data);
+
+	// Write data to text file for analysis
+	char input_filename[128];
+
+	printf("Here1!\n");
+
+	strcpy(input_filename, "input_h_cufft.txt");
+
+	printf("Here2!\n");
+
+	FILE* input_file;
+
+	printf("Here3!\n");
+
+	input_file = fopen(input_filename, "w");
+
+	printf("Here4!\n");
+
+	for (int ii = 0; ii < N_INPUT; ii++) { 
+		//fprintf(input_file, "%c\n", input_data[ii]);
+		fprintf(input_file, "%g\n", input_test[ii]);
+	}
+
+	printf("Here5!\n");
+
+	fclose(input_file);
+
+	printf("Closed input file.\n");
+
+	// --------------------- Input data test end ------------------- //
+*/
+
 	// Allocate memory for output array
 	float* output_data;
 
-	printf("Here5!\n");
+	printf("Here6!\n");
 
 	float time_taken = 0;
 	float fft_time = 0;
@@ -293,38 +361,37 @@ int main() {
 	}
 	printf("Average FFT processing time: %f s\n", fft_time/num_runs);
 
-	printf("Here6, FFT output: %f \n", output_data[0]);
+	printf("Here7, FFT output: %f \n", output_data[0]);
 	
 	// Write data to text file for analysis
 	char output_filename[128];
 
-	printf("Here7!\n");
+	printf("Here8!\n");
 
 	strcpy(output_filename, "output_d_cufft.txt");
 
-	printf("Here8!\n");
+	printf("Here9!\n");
 
 	FILE* output_file;
 
-	printf("Here9!\n");
+	printf("Here10!\n");
 
 	output_file = fopen(output_filename, "w");
 
-	printf("Here10!\n");
+	printf("Here11!\n");
 
 	for (int ii = 0; ii < ((N_INPUT*n_pol*n_chan*nt)/(N_POL*N_FREQ*N_TIME)); ii++) { // Write up to the size of the data corresponding to 1k, 4k or 32k mode
 		//fprintf(output_file, "%c\n", output_data[ii]);
 		fprintf(output_file, "%g\n", output_data[ii]);
 	}
 
-	printf("Here11!\n");
+	printf("Here12!\n");
 
 	fclose(output_file);
 
 	printf("Closed output file.\n");
 
 	//free(sim_data);
-	printf("After freeing coefficients.\n");
 	//free(output_data);	
 
 	printf("Freed output array and unregistered arrays in pinned memory.\n");
