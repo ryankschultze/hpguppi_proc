@@ -386,7 +386,7 @@ int main() {
 
 	printf("Here8!\n");
 
-	strcpy(output_filename, "/datag/users/mruzinda/ooutput_d_cufft.txt");
+	strcpy(output_filename, "output_d_cufft.txt");
 
 	printf("Here9!\n");
 

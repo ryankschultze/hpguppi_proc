@@ -202,7 +202,7 @@ void beamformer_power_sti(float* bf_volt, float* bf_power, int offset, int n_pol
 	float x_pol_pow; // XX*
 	float y_pol_pow; // YY*
 	float beam_power;
-	float scale = 1.0/N_TIME_STI;
+	float scale = 1.0; // /N_TIME_STI;
 
 	__shared__ float reduced_array[N_STI_BLOC];
 
@@ -264,7 +264,7 @@ void beamformer_power_sti(float* bf_volt, float* bf_power, int offset, int n_pol
 			// After reduction is complete, assign each reduced value to appropriate position in output array.
 			if(t == 0){
 				//int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
-				bf_power[h] = reduced_array[0]*scale;
+				bf_power[h] = reduced_array[0];
 			}
 		}
 	}
