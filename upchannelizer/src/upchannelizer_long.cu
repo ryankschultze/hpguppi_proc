@@ -295,8 +295,8 @@ int main() {
 	//int n_chan = 1; 
         //int nt = 4194304; // 2^22
 	// 4k mode
-    	int n_chan = 4;
-        int nt = 1048576; // 2^20
+    	int n_chan = 64;
+        int nt = 8192; // 1048576; // 2^20
 	// 32k mode
     	//int n_chan = 32;
         //int nt = 131072; // 2^17
@@ -386,7 +386,7 @@ int main() {
 
 	printf("Here8!\n");
 
-	strcpy(output_filename, "output_d_cufft.txt");
+	strcpy(output_filename, "/datag/users/mruzinda/o/output_d_cufft.bin");
 
 	printf("Here9!\n");
 
@@ -394,7 +394,7 @@ int main() {
 
 	printf("Here10!\n");
 
-	output_file = fopen(output_filename, "w");
+	output_file = fopen(output_filename, "wb");
 
 	printf("Here11!\n");
 

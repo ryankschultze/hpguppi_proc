@@ -72,19 +72,14 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 	int c = blockIdx.z;  // Coarse channel index
         int p = 0;           // Polarization index
 
-	int tb = 0; // Index for block of time samples to compensate max number of threads
-	int TS = n_samp/MAX_THREADS; // Number of blocks of time samples to process
-
 	// data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)
 	for(p=0; p<n_pol; p++){
-		for(tb = 0; tb < TS; tb++){
 		// If the input data is not float e.g. signed char, just multiply it by '1.0f' to convert it to a float
-			int h_in = data_in_idx(p, t + tb*MAX_THREADS, w, (c + offset), a, n_pol, n_samp, n_win, n_chan); // data_in_idx(p, t, (f + offset), a, nt, n_chan);
-			int h_tr = data_tr_idx(t + tb*MAX_THREADS, a, p, w, (c + offset), n_samp, n_pol, n_win); // data_tr_idx(a, p, (f + offset), t, n_chan); (t, a, p, w, c, Nt, Np, Nw)
+		int h_in = data_in_idx(p, t, w, (c + offset), a, n_pol, n_samp, n_win, n_chan); // data_in_idx(p, t, (f + offset), a, nt, n_chan);
+		int h_tr = data_tr_idx(t, a, p, w, (c + offset), n_samp, n_pol, n_win); // data_tr_idx(a, p, (f + offset), t, n_chan); (t, a, p, w, c, Nt, Np, Nw)
 
-			data_tra[h_tr].x = data_in[2*h_in]*1.0f;
-			data_tra[h_tr].y = data_in[2*h_in + 1]*1.0f;
-		}
+		data_tra[h_tr].x = data_in[2*h_in]*1.0f;
+		data_tra[h_tr].y = data_in[2*h_in + 1]*1.0f;
 	}
 
 	return;
@@ -95,9 +90,7 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int n_samp){
         cufftHandle plan;
 
-	int n[RANK] = {MAX_THREADS};
-	int TS = n_samp/MAX_THREADS; // Number of blocks of time samples to process
-
+	int n[RANK] = {n_samp};
 	// Setup the cuFFT plan
 	//if (cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan,n_win)) != CUFFT_SUCCESS){
 	//	fprintf(stderr, "CUFFT error: Plan creation failed");
@@ -105,17 +98,15 @@ void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int 
 	//}
 
 	// Setup the cuFFT plan	
-	if (cufftPlanMany(&plan, RANK, n, n, ISTRIDE, MAX_THREADS, n, OSTRIDE, MAX_THREADS, CUFFT_C2C, BATCH(n_pol,n_chan,n_win)) != CUFFT_SUCCESS){
+	if (cufftPlanMany(&plan, RANK, n, n, ISTRIDE, n_samp, n, OSTRIDE, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan,n_win)) != CUFFT_SUCCESS){
 		fprintf(stderr, "CUFFT error: Plan creation failed");
 		return;	
 	}
 
     	// Execute a complex-to-complex 1D FFT
-	for(int tb = 0; tb < TS; tb++){
-		if (cufftExecC2C(plan, &data_tra[tb*MAX_THREADS], &data_tra[tb*MAX_THREADS], CUFFT_FORWARD) != CUFFT_SUCCESS){
-			fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
-			return;	
-		}
+	if (cufftExecC2C(plan, data_tra, data_tra, CUFFT_FORWARD) != CUFFT_SUCCESS){
+		fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
+		return;	
 	}
 }
 
@@ -131,8 +122,7 @@ float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_sam
 	//dim3 dimBlock_transpose(N_ANT, n_pol, 1);
 	//dim3 dimGrid_transpose(n_samp, n_chan, n_win);
 
-	//dim3 dimBlock_transpose(n_samp, 1, 1);
-	dim3 dimBlock_transpose(MAX_THREADS, 1, 1);
+	dim3 dimBlock_transpose(n_samp, 1, 1);
 	dim3 dimGrid_transpose(N_ANT, n_win, n_chan);
 
 	signed char* d_data_in = d_data_char;
@@ -284,22 +274,14 @@ int main() {
 	//int n_chan = 16; 
         //int nt = 32768;
 	// 4k mode
-    	//int n_chan = 64;
-        //int nt = 8192;
+    	int n_chan = 64;
+        int nt = 8192;
 	// 32k mode
     	//int n_chan = 512;
         //int nt = 1024;
 
-	// 5 seconds worth of processing at a time
-	// 1k mode
-	//int n_chan = 1; 
-        //int nt = 4194304; // 2^22
-	// 4k mode
-    	int n_chan = 64;
-        int nt = 8192; // 1048576; // 2^20
-	// 32k mode
-    	//int n_chan = 32;
-        //int nt = 131072; // 2^17
+	//int n_chan = 8;
+        //int nt = 64;
 
         int n_win = N_TIME_STI;
         int n_samp = nt/n_win;
@@ -386,7 +368,7 @@ int main() {
 
 	printf("Here8!\n");
 
-	strcpy(output_filename, "/datag/users/mruzinda/o/output_d_cufft.bin");
+	strcpy(output_filename, "output_d_cufft.txt");
 
 	printf("Here9!\n");
 
@@ -394,15 +376,14 @@ int main() {
 
 	printf("Here10!\n");
 
-	output_file = fopen(output_filename, "wb");
+	output_file = fopen(output_filename, "w");
 
 	printf("Here11!\n");
 
-	//for (int ii = 0; ii < ((N_INPUT*n_pol*n_chan*nt)/(N_POL*N_FREQ*N_TIME)); ii++) { // Write up to the size of the data corresponding to 1k, 4k or 32k mode
-	//	//fprintf(output_file, "%c\n", output_data[ii]);
-	//	fprintf(output_file, "%g\n", output_data[ii]);
-	//}
-	fwrite(output_data, sizeof(float), (N_INPUT*n_pol*n_chan*nt)/(N_POL*N_FREQ*N_TIME), output_file);
+	for (int ii = 0; ii < ((N_INPUT*n_pol*n_chan*nt)/(N_POL*N_FREQ*N_TIME)); ii++) { // Write up to the size of the data corresponding to 1k, 4k or 32k mode
+		//fprintf(output_file, "%c\n", output_data[ii]);
+		fprintf(output_file, "%g\n", output_data[ii]);
+	}
 
 	printf("Here12!\n");
 

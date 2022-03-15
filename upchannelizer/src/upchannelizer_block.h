@@ -3,15 +3,15 @@
 //#include <complex.h>
 #include <math.h>
 
-#define MAX_THREADS (1024)  // Maximum number of threads in a block
+
 #define N_POL (2) //2                     // Number of polarizations
-#define N_TIME (131072) // (1024) // 8192 //16384 //1 // 8                   // Number of time samples
+#define N_TIME (1024) // 8192 //16384 //1 // 8                   // Number of time samples
 #define N_TIME_STI (8)
 #define N_STI (N_TIME/N_TIME_STI)
 #define N_STI_BLOC (32)
 #define N_STREAMS (1)                     // Number of CUDA streams
 //#define N_COARSE_FREQ 64 //32               // Number of coarse channels processed at a time
-#define MAX_COARSE_FREQ (32) // (512)                 // Max number of coarse channels is the number of channels in 32k mode
+#define MAX_COARSE_FREQ (512)                 // Max number of coarse channels is the number of channels in 32k mode
 #define N_FINE_FREQ (1) //16384               // Number of fine channels per coarse channel 2^14 = 16384
 //#define N_FREQ (N_COARSE_FREQ*N_FINE_FREQ) // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
 #define N_FREQ (MAX_COARSE_FREQ*N_FINE_FREQ) // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
