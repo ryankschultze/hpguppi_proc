@@ -80,7 +80,7 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 		for(tb = 0; tb < TS; tb++){
 		// If the input data is not float e.g. signed char, just multiply it by '1.0f' to convert it to a float
 			int h_in = data_in_idx(p, t + tb*MAX_THREADS, w, (c + offset), a, n_pol, n_samp, n_win, n_chan); // data_in_idx(p, t, (f + offset), a, nt, n_chan);
-			int h_tr = data_tr_idx(t + tb*MAX_THREADS, a, p, w, (c + offset), n_samp, n_pol, n_win); // data_tr_idx(a, p, (f + offset), t, n_chan); (t, a, p, w, c, Nt, Np, Nw)
+			int h_tr = data_tr_idx(t + tb*MAX_THREADS, a, p, (c + offset), w, n_samp, n_pol, n_chan); // data_tr_idx(a, p, (f + offset), t, n_chan); (t, a, p, w, c, Nt, Np, Nw)
 
 			data_tra[h_tr].x = data_in[2*h_in]*1.0f;
 			data_tra[h_tr].y = data_in[2*h_in + 1]*1.0f;
@@ -98,7 +98,7 @@ void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int 
 	//int n[RANK] = {n_samp};
 
 	// Setup the cuFFT plan
-	if (cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_win)) != CUFFT_SUCCESS){
+	if (cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan)) != CUFFT_SUCCESS){
 		fprintf(stderr, "CUFFT error: Plan creation failed");
 		return;	
 	}
@@ -120,15 +120,15 @@ void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int 
 	}
 */
 	// Setup the cuFFT plan	
-	//if (cufftPlanMany(&plan, RANK, n, n, ISTRIDE, n_samp, n, OSTRIDE, n_samp, CUFFT_C2C, BATCH(n_pol,n_win)) != CUFFT_SUCCESS){
+	//if (cufftPlanMany(&plan, RANK, n, n, ISTRIDE, n_samp, n, OSTRIDE, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan)) != CUFFT_SUCCESS){
 	//	fprintf(stderr, "CUFFT error: Plan creation failed");
 	//	return;	
 	//}
 
     	// Execute a complex-to-complex 1D FFT
 	int h = 0;
-	for(int c = 0; c < n_chan; c++){
-		h = data_tr_idx(0, 0, 0, 0, c, n_samp, n_pol, n_win);
+	for(int w = 0; w < n_win; w++){
+		h = data_tr_idx(0, 0, 0, 0, w, n_samp, n_pol, n_chan);
 		if (cufftExecC2C(plan, &data_tra[h], &data_tra[h], CUFFT_FORWARD) != CUFFT_SUCCESS){
 			fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
 			return;	
@@ -310,13 +310,13 @@ int main() {
 	// 5 seconds worth of processing at a time
 	// 1k mode
 	//int n_chan = 1; 
-        //int nt = 4194304; // 2^22
+        //int nt = 4096*1024; // 4194304; // 2^22
 	// 4k mode
-    	int n_chan = 4; // 64
-        int nt = 1024*1024; // 1048576; // 2^20
+    	//int n_chan = 4; // 64
+        //int nt = 1024*1024; // 1048576; // 2^20
 	// 32k mode
-    	//int n_chan = 32;
-        //int nt = 131072; // 2^17
+    	int n_chan = 32;
+        int nt = 128*1024; // 131072; // 2^17
 
         int n_win = N_TIME_STI;
         int n_samp = nt/n_win;
