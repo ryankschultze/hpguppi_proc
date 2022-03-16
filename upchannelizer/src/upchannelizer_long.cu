@@ -95,15 +95,16 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int n_samp){
         cufftHandle plan;
 
-	int n[RANK] = {MAX_THREADS};
-	int TS = n_samp/MAX_THREADS; // Number of blocks of time samples to process
+	//int n[RANK] = {n_samp};
 
 	// Setup the cuFFT plan
-	//if (cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan,n_win)) != CUFFT_SUCCESS){
-	//	fprintf(stderr, "CUFFT error: Plan creation failed");
-	//	return;	
-	//}
-
+	if (cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_win)) != CUFFT_SUCCESS){
+		fprintf(stderr, "CUFFT error: Plan creation failed");
+		return;	
+	}
+/*
+	int n[RANK] = {MAX_THREADS};
+	int TS = n_samp/MAX_THREADS; // Number of blocks of time samples to process
 	// Setup the cuFFT plan	
 	if (cufftPlanMany(&plan, RANK, n, n, ISTRIDE, MAX_THREADS, n, OSTRIDE, MAX_THREADS, CUFFT_C2C, BATCH(n_pol,n_chan,n_win)) != CUFFT_SUCCESS){
 		fprintf(stderr, "CUFFT error: Plan creation failed");
@@ -113,6 +114,22 @@ void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int 
     	// Execute a complex-to-complex 1D FFT
 	for(int tb = 0; tb < TS; tb++){
 		if (cufftExecC2C(plan, &data_tra[tb*MAX_THREADS], &data_tra[tb*MAX_THREADS], CUFFT_FORWARD) != CUFFT_SUCCESS){
+			fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
+			return;	
+		}
+	}
+*/
+	// Setup the cuFFT plan	
+	//if (cufftPlanMany(&plan, RANK, n, n, ISTRIDE, n_samp, n, OSTRIDE, n_samp, CUFFT_C2C, BATCH(n_pol,n_win)) != CUFFT_SUCCESS){
+	//	fprintf(stderr, "CUFFT error: Plan creation failed");
+	//	return;	
+	//}
+
+    	// Execute a complex-to-complex 1D FFT
+	int h = 0;
+	for(int c = 0; c < n_chan; c++){
+		h = data_tr_idx(0, 0, 0, 0, c, n_samp, n_pol, n_win);
+		if (cufftExecC2C(plan, &data_tra[h], &data_tra[h], CUFFT_FORWARD) != CUFFT_SUCCESS){
 			fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
 			return;	
 		}
@@ -295,8 +312,8 @@ int main() {
 	//int n_chan = 1; 
         //int nt = 4194304; // 2^22
 	// 4k mode
-    	int n_chan = 64;
-        int nt = 8192; // 1048576; // 2^20
+    	int n_chan = 4; // 64
+        int nt = 1024*1024; // 1048576; // 2^20
 	// 32k mode
     	//int n_chan = 32;
         //int nt = 131072; // 2^17
@@ -323,7 +340,7 @@ int main() {
 
 	printf("Here1!\n");
 
-	strcpy(input_filename, "input_h_cufft.txt");
+	strcpy(input_filename, "/datag/users/mruzinda/i/input_h_cufft.bin");
 
 	printf("Here2!\n");
 
@@ -335,10 +352,7 @@ int main() {
 
 	printf("Here4!\n");
 
-	for (int ii = 0; ii < N_INPUT; ii++) { 
-		//fprintf(input_file, "%c\n", input_data[ii]);
-		fprintf(input_file, "%g\n", input_test[ii]);
-	}
+	fwrite(input_test, sizeof(float), N_INPUT, input_file);
 
 	printf("Here5!\n");
 

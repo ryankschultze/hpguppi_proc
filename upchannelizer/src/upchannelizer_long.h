@@ -33,7 +33,8 @@
 #define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_STI)               // Size of beamformer output after abs()^2 and short time integration
 // For cuFFT
 #define RANK                (1)
-#define BATCH(Np,Nf,Nw)     (N_ANT)*(Np)*(Nf)*(Nw)
+//#define BATCH(Np,Nw,Nf)     (N_ANT)*(Np)*(Nw)*(Nf)
+#define BATCH(Np,Nw)        (N_ANT)*(Np)*(Nw)
 #define ISTRIDE             (1)
 #define IDIST(Nt)           (Nt)
 #define OSTRIDE             (1)
