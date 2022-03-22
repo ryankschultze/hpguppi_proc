@@ -253,8 +253,9 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 	sim_flag = 2 -> Ones placed in a particular bin at a particular antenna (bin 3 and antenna 3 for now)
 	sim_flag = 3 -> Rect placed in a particular bin at a particular antenna (bin 3 and antenna 3 for now)
 	sim flag = 4 -> Simulated cosine wave
+	sim flag = 5 -> Simulated complex exponential i.e. exp(j*2*pi*f0*t)
 	*/
-	int sim_flag = 3;
+	int sim_flag = 5;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
 			if(i < (N_REAL_INPUT/2)){
@@ -289,8 +290,8 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 	if (sim_flag == 3) {
 		// data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)
 		for (int p = 0; p < n_pol; p++) {
-			for (int t = (1024*100); t < (nt-(1024*100)); t++) {
-				data_sim[2 * data_in_idx(p, t, 0, 0, 2, n_pol, nt, 1, n_chan)] = 1;
+			for (int t = (1024*10); t < (nt-(1024*10)); t++) {
+				data_sim[2 * data_in_idx(p, t, 0, 2, 2, n_pol, nt, 1, n_chan)] = 1;
 				// data_sim[2 * data_in_idx(p, t, 0, 2, 2, n_pol, nt, 1, n_chan)] = tmp;
 			}
 		}
@@ -311,6 +312,35 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 						//data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
 						// Y polarization
 						data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						//data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
+
+						// X polarization
+						//data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan)] = (cos(2 * PI * freq * t*0.000001));
+						// Y polarization
+						//data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan)] = (cos(2 * PI * freq * t*0.000001));
+					}
+				}
+			}
+		}
+	}
+	if (sim_flag == 5) {
+		float freq = 1e3; // Resonant frequency
+
+                float tmp_max = 1.0;
+		float tmp_min = -1.0;
+
+		for (int t = 0; t < nt; t++) {
+			for (int f = 0; f < n_chan; f++) {
+				for (int a = 0; a < N_ANT; a++) {
+					if(a < N_REAL_ANT){
+						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
+						// X polarization
+						data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						//data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
+						// Y polarization
+						data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
 						//data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
 
 						// X polarization
@@ -369,11 +399,11 @@ int main() {
 
 	// 5 seconds worth of processing at a time
 	// 1k mode
-	int n_chan = 1; 
-        int nt = 4096*1024; // 4194304; // 2^22
+	//int n_chan = 1; 
+        //int nt = 4096*1024; // 4194304; // 2^22
 	// 4k mode
-    	//int n_chan = 4; // 64
-        //int nt = 1024*1024; // 1048576; // 2^20
+    	int n_chan = 4; // 64
+        int nt = 1024*1024; // 1048576; // 2^20
 	// 32k mode
     	//int n_chan = 32;
         //int nt = 128*1024; // 131072; // 2^17
