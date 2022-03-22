@@ -730,7 +730,7 @@ void cohbfCleanup() {
 }
 
 //Comment out main() function when compiling for hpguppi
-// <----Uncomment here if testing standalone code
+/* // <----Uncomment here if testing standalone code
 // Test all of the kernels and functions, and write the output to
 // a text file for analysis
 int main() {
@@ -863,4 +863,4 @@ int main() {
 
 	return 0;
 }
-// <----Uncomment here if testing standalone code
+*/ // <----Uncomment here if testing standalone code
