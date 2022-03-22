@@ -60,9 +60,10 @@
 #define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
 //#define data_tr_idx(a, p, w, c, t, Np, Nw, Nc)               ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(w) + (Nw)*(Np)*(N_ANT)*(c) + (Nc)*(Nw)*(Np)*(N_ANT)*(t))
 #define data_tr_idx(t, a, p, c, w, Nt, Np, Nc)               ((t) + (Nt)*(a) + (N_ANT)*(Nt)*(p) + (Np)*(N_ANT)*(Nt)*(c) + (Nc)*(Np)*(N_ANT)*(Nt)*(w))
-#define data_fft_out_idx(f, a, p, w, c, Np, Nw, Nc, Nf)      ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
+#define data_fft_out_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
 // The "Nf" below is equal in value to "Nt*Nc" that is the dimension of "t" since this is the number of FFT points muliplied by the number of coarse channels
-#define data_fft_tra_idx(a, p, w, c, f, Np, Nw, Nc)          ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(w) + (Nw)*(Np)*(N_ANT)*(c) + (Nc)(Nw)*(Np)*(N_ANT)*(f))
+#define data_fftshift_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
+//#define data_fft_tr_idx(a, p, w, c, f, Np, Nw, Nc)           ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(w) + (Nw)*(Np)*(N_ANT)*(c) + (Nc)(Nw)*(Np)*(N_ANT)*(f))
 
 #ifdef __cplusplus
 extern "C" {

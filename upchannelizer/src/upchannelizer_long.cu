@@ -312,11 +312,11 @@ int main() {
 	//int n_chan = 1; 
         //int nt = 4096*1024; // 4194304; // 2^22
 	// 4k mode
-    	//int n_chan = 4; // 64
-        //int nt = 1024*1024; // 1048576; // 2^20
+    	int n_chan = 4; // 64
+        int nt = 1024*1024; // 1048576; // 2^20
 	// 32k mode
-    	int n_chan = 32;
-        int nt = 128*1024; // 131072; // 2^17
+    	//int n_chan = 32;
+        //int nt = 128*1024; // 131072; // 2^17
 
         int n_win = N_TIME_STI;
         int n_samp = nt/n_win;
@@ -331,37 +331,40 @@ int main() {
 
         printf("After simulate_data() \n");
 
-/*
+
 	// --------------------- Input data test --------------------- //
-	float* input_test = data_test(sim_data);
+	int input_write = 1; // If input_write is set to 1, the simulated data will be written to a binary file for testing/verification
 
-	// Write data to text file for analysis
-	char input_filename[128];
+	if(input_write == 1){
+		float* input_test = data_test(sim_data);
 
-	printf("Here1!\n");
+		// Write data to binary file for analysis
+		char input_filename[128];
 
-	strcpy(input_filename, "/datag/users/mruzinda/i/input_h_cufft.bin");
+		printf("Here1!\n");
 
-	printf("Here2!\n");
+		strcpy(input_filename, "/datag/users/mruzinda/i/input_h_cufft.bin");
 
-	FILE* input_file;
+		printf("Here2!\n");
 
-	printf("Here3!\n");
+		FILE* input_file;
 
-	input_file = fopen(input_filename, "w");
+		printf("Here3!\n");
 
-	printf("Here4!\n");
+		input_file = fopen(input_filename, "w");
 
-	fwrite(input_test, sizeof(float), N_INPUT, input_file);
+		printf("Here4!\n");
 
-	printf("Here5!\n");
+		fwrite(input_test, sizeof(float), N_INPUT, input_file);
 
-	fclose(input_file);
+		printf("Here5!\n");
 
-	printf("Closed input file.\n");
+		fclose(input_file);
 
+		printf("Closed input file.\n");
+	}
 	// --------------------- Input data test end ------------------- //
-*/
+
 
 	// Allocate memory for output array
 	float* output_data;
@@ -395,7 +398,7 @@ int main() {
 
 	printf("Here7, FFT output: %f \n", output_data[0]);
 	
-	// Write data to text file for analysis
+	// Write data to binary file for analysis
 	char output_filename[128];
 
 	printf("Here8!\n");
