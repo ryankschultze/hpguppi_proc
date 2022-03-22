@@ -411,7 +411,7 @@ signed char* simulate_data(int n_pol, int n_chan, int n_samp) {
 	sim flag = 3 -> Simulated radio source in center beam assuming ULA
         sim_flag = 4 -> One value at one polarization, one element, one time sample, and one frequency bin
 	*/
-	int sim_flag = 0;
+	int sim_flag = 3;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
 			if(i < (N_REAL_INPUT/2)){
@@ -534,7 +534,7 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 	sim flag = 3 -> Simulated beams from 58 to 122 degrees. Assuming a ULA.
         sim_flag = 4 -> One value at one polarization, one element, one beam, and one frequency bin
 	*/
-	int sim_flag = 0;
+	int sim_flag = 3;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (((N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ)) / 2); i++) {
 			coeff_sim[2 * i] = 1;
@@ -586,10 +586,10 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 		float theta = 0; // Beam angle from 58 to 122 degrees
 		float tau_beam = 0; // Delay
 
-
+		int b = 2;
 		for (int f = 0; f < n_chan; f++) {
 			rf_freqs = chan_band * f + c_freq;
-			for (int b = 0; b < n_beam; b++) {
+			//for (int b = 0; b < n_beam; b++) {
 				theta = ((b - (n_beam / 2)) + 90)*PI/180; // Beam angle from 58 to 122 degrees - Given SOI at 90 deg or moving across array, the beam with the most power is beamm 33
 				tau_beam = d * cos(theta) / c; // Delay
 				for (int a = 0; a < N_ANT; a++) {
@@ -606,7 +606,7 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 						coeff_sim[2 * coeff_idx(a, 1, b, f, n_pol, n_beam) + 1] = sin(2 * PI * rf_freqs * a * tau_beam);
 					}
 				}
-			}
+			//}
 		}
 	}
         if (sim_flag == 4) {
@@ -730,7 +730,7 @@ void cohbfCleanup() {
 }
 
 //Comment out main() function when compiling for hpguppi
-/* // <----Uncomment here if testing standalone code
+// <----Uncomment here if testing standalone code
 // Test all of the kernels and functions, and write the output to
 // a text file for analysis
 int main() {
@@ -819,8 +819,8 @@ int main() {
 
 	printf("Here7!\n");
 
-	//strcpy(output_filename, "C:\Users\ruzie\OneDrive\Desktop\Work\CUDA_code\output_d.txt");
-	strcpy(output_filename, "output_d_cuda.txt");
+	//strcpy(output_filename, "/datag/users/mruzinda/o/output_d_cuda.txt");
+	strcpy(output_filename, "/datag/users/mruzinda/o/output_d_cubf.bin");
 
 	printf("Here8!\n");
 
@@ -828,14 +828,16 @@ int main() {
 
 	printf("Here9!\n");
 
-	output_file = fopen(output_filename, "w");
+	output_file = fopen(output_filename, "wb");
 
 	printf("Here10!\n");
 
-	for (int ii = 0; ii < ((N_BF_POW*n_beam*n_chan*n_win)/(N_BEAM*MAX_COARSE_FREQ*N_TIME)); ii++) { // Write up to the size of the data corresponding to 1k, 4k or 32k mode
-		//fprintf(output_file, "%c\n", output_data[ii]);
-		fprintf(output_file, "%g\n", output_data[ii]);
-	}
+	//for (int ii = 0; ii < ((N_BF_POW*n_beam*n_chan*n_win)/(N_BEAM*MAX_COARSE_FREQ*N_TIME)); ii++) { // Write up to the size of the data corresponding to 1k, 4k or 32k mode
+	//	//fprintf(output_file, "%c\n", output_data[ii]);
+	//	fprintf(output_file, "%g\n", output_data[ii]);
+	//}
+
+	fwrite(output_data, sizeof(float), (N_BF_POW*n_beam*n_chan*n_win)/(N_BEAM*MAX_COARSE_FREQ*N_TIME), output_file);
 
 	printf("Here11!\n");
 
@@ -861,4 +863,4 @@ int main() {
 
 	return 0;
 }
-*/ // <----Uncomment here if testing standalone code
+// <----Uncomment here if testing standalone code
