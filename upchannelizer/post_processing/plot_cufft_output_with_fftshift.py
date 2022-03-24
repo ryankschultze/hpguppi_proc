@@ -32,8 +32,10 @@ N_pol = 2
 N_ant = 64 
 N_iq = 2
 
+# data_fftshift_idx(f, a, p, c, w, Nf, Np, Nc)
+# data_fftshift_idx(a, p, f, c, w, n_pol, n_fine, n_coarse);
 # Reshape array to multidimensional -> IQ X Fine channels X Antenna X Polarization X Coarse channels X Time Windows
-contents_array = contents_float[0:(N_coarse*N_win*N_pol*N_ant*N_fine*N_iq)].reshape(N_win,N_coarse,N_pol,N_ant,N_fine,N_iq)
+contents_array = contents_float[0:(N_coarse*N_win*N_pol*N_ant*N_fine*N_iq)].reshape(N_win,N_coarse,N_fine,N_pol,N_ant,N_iq)
 
 # Initialize real and imaginary components
 contents_restructure = np.zeros(N_win*N_pol*N_ant*N_coarse*N_fine*N_iq).reshape(N_win,N_pol,N_ant,N_coarse*N_fine,N_iq)
@@ -46,11 +48,11 @@ for c in range(0,N_coarse):
         for p in range(0,N_pol):
             for a in range(0,N_ant):
                 # FFT output (amplitude)
-                X[w,p,a,(0+c*N_fine):(N_fine+c*N_fine)] = np.sqrt(np.square(contents_array[w,c,p,a,0:N_fine,0]) + np.square(contents_array[w,c,p,a,0:N_fine,1]))
+                X[w,p,a,(0+c*N_fine):(N_fine+c*N_fine)] = np.sqrt(np.square(contents_array[w,c,0:N_fine,p,a,0]) + np.square(contents_array[w,c,0:N_fine,p,a,1]))
 
                 for iq in range(0,N_iq):
                     # FFT output (amplitude)
-                    contents_restructure[w,p,a,(0+c*N_fine):(N_fine+c*N_fine),iq] = contents_array[w,c,p,a,0:N_fine,iq]
+                    contents_restructure[w,p,a,(0+c*N_fine):(N_fine+c*N_fine),iq] = contents_array[w,c,0:N_fine,p,a,iq]
 
 ant_idx = 0 # beam index to plot
 pol_idx = 0 # polarization index to plot

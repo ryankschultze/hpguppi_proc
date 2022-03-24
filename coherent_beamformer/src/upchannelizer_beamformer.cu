@@ -27,6 +27,14 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 __global__
 void fft_shift(cuComplex* data_in, cuComplex* data_tra, int offset, int n_pol, int n_coarse, int n_win, int n_fine);
 
+// Perform beamforming operation
+__global__
+void coherent_beamformer(cuComplex* input_data, float* coeff, float* output_data, int offset, int n_pol, int n_fine, int n_coarse, int n_beam, int n_win);
+
+// Compute power of beamformer output with STI (abs()^2)
+__global__
+void beamformer_power_sti(cuComplex* bf_volt, float* bf_power, int offset, int n_pol, int n_beam, int n_coarse, int n_fine, int n_time_int, int n_sti);
+
 // Convenience function for checking CUDA runtime API results
 // can be wrapped around any runtime API call. No-op in release builds.
 inline
@@ -43,10 +51,12 @@ cudaError_t checkCuda(cudaError_t result)
 signed char* d_data_char = NULL;
 cuComplex* d_data_comp = NULL;
 cuComplex* d_data_shift = NULL;
-float* h_fft = NULL;
+float* d_coeff = NULL;
+float* d_coh_bf_pow = NULL;
+float* h_bf_pow = NULL;
 
 // Allocate memory to all arrays 
-void init_FFT() {
+void init_beamformer() {
 	printf("Here In init_FFT()! \n");
 
 	// Allocate memory for input data float type
@@ -61,9 +71,22 @@ void init_FFT() {
 	checkCuda(cudaMalloc((void **)&d_data_shift, (N_INPUT) * sizeof(cuComplex) / 2));
 	printf("Here 3rd cudaMalloc! \n");
 
-	checkCuda(cudaMallocHost((void **)&h_fft, (N_INPUT) * sizeof(float)));
+	// Allocate memory for coefficients float type
+	checkCuda(cudaMalloc((void **)&d_coeff, N_COEFF * sizeof(float)));
+	printf("Here 3rd cudaMalloc! \n");
+
+	// Allocate memory for output power of coherent beamformer
+        checkCuda(cudaMalloc((void **)&d_coh_bf_pow, (N_BF_POW) * sizeof(float)));
+	printf("Here 4th cudaMalloc! \n");
+
+	checkCuda(cudaMallocHost((void **)&h_bf_pow, (N_BF_POW) * sizeof(float)));
 
 	return;
+}
+
+// Set arrays to zero after a block is processed
+void set_to_zero(){
+	checkCuda(cudaMemset(d_data_comp, 0, (N_INPUT) * sizeof(cuComplex)/2));
 }
 
 // Perform transpose on the data and convert to floats
@@ -152,39 +175,168 @@ void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int 
 // Perform transpose on the output of the FFT
 __global__
 void fft_shift(cuComplex* data_in, cuComplex* data_tra, int offset, int n_pol, int n_coarse, int n_win, int n_fine) {
-	int f = threadIdx.x; // Fine channel index
-	int a = blockIdx.x;  // Antenna index
-	int w = blockIdx.y;  // Time window index
-	int c = blockIdx.z;  // Coarse channel index
-        int p = 0;           // Polarization index
+        // 'f' is the largest dimension and is sometimes larger than 1024 which is the max number of threads
+        // So 'f' should be the blockIdx.x which has the largest max value (over 2e9 elements)
+        // Since 'f' has to be the fasted moving index for the cufftExecC2C(), but 'a' needs to be the fastest moving index
+        // for beamforming, then threadIdx.x can't be used for 'a' in this case, and threadIdx.y must be used instead.
+        // blockIdx.x can't be a faster moving dimension than threadIdx.x
+	int a = threadIdx.y; // Antenna index
+	int p = threadIdx.z; // Polarization index
+	int f = blockIdx.x;  // Fine channel index
+	int c = blockIdx.y;  // Coarse channel index
+	int w = blockIdx.z;  // Time window index
 
-	int fb = 0; // Index for block of fin channels to compensate max number of threads
-	int Fblocks = n_fine/MAX_THREADS; // Number of blocks of fine channels to process
-	int ff = 0;
         int h_in = 0;
 	int h_sh = 0;
 
+	if(f < (n_fine/2)){
+		h_in = data_fft_out_idx(f, a, p, (c + offset), w, n_fine, n_pol, n_coarse); 
+		h_sh = data_fftshift_idx(a, p, (f+(n_fine/2)), (c + offset), w, n_pol, n_fine, n_coarse);
 
-//#define data_fft_out_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
-//#define data_fftshift_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
+		data_tra[h_sh].x = data_in[h_in].x;
+		data_tra[h_sh].y = data_in[h_in].y;
+	}else if((f >= (n_fine/2)) && (f < n_fine)){
+		h_in = data_fft_out_idx(f, a, p, (c + offset), w, n_fine, n_pol, n_coarse);
+		h_sh = data_fftshift_idx(a, p, (f-(n_fine/2)), (c + offset), w, n_pol, n_fine, n_coarse);
 
+		data_tra[h_sh].x = data_in[h_in].x;
+		data_tra[h_sh].y = data_in[h_in].y;
+	}
 
+	return;
+}
 
-	for(p=0; p<n_pol; p++){
-		for(fb = 0; fb < Fblocks; fb++){
-			ff = (f + fb*MAX_THREADS);
-			if(ff < (n_fine/2)){
-				h_in = data_fft_out_idx(ff, a, p, (c + offset), w, n_fine, n_pol, n_coarse); 
-				h_sh = data_fftshift_idx((ff+(n_fine/2)), a, p, (c + offset), w, n_fine, n_pol, n_coarse);
+// Perform beamforming operation
+__global__
+void coherent_beamformer(cuComplex* input_data, float* coeff, cuComplex* output_data, int offset, int n_pol, int n_fine, int n_coarse, int n_beam, int n_win) {
+	int a = threadIdx.x; // Antenna index
+	int p = threadIdx.y; // Polarization index
+	int f = blockIdx.x;  // Fine channel index
+	int c = blockIdx.y;  // Coarse channel index
+	int b = blockIdx.z;  // Beam index
 
-				data_tra[h_sh].x = data_in[h_in].x;
-				data_tra[h_sh].y = data_in[h_in].y;
-			}else if((ff >= (n_fine/2)) && (ff < n_fine)){
-				h_in = data_fft_out_idx(ff, a, p, (c + offset), w, n_fine, n_pol, n_coarse);
-				h_sh = data_fftshift_idx((ff-(n_fine/2)), a, p, (c + offset), w, n_fine, n_pol, n_coarse);
+	__shared__ cuFloatComplex reduced_mul[N_ANT];
 
-				data_tra[h_sh].x = data_in[h_in].x;
-				data_tra[h_sh].y = data_in[h_in].y;
+	int n_freq_streams = n_chan/N_STREAMS;
+
+	if(f < n_freq_streams){
+		for (int s = 0; s < n_win; s++) { // STI window index
+
+			int i = data_fftshift_idx(a, p, f, (c + offset), s, n_pol, n_fine, n_coarse); // data_tr_idx(a, p, (f + offset), t, n_pol, n_chan); // (a, p, f, t, Np, Nf)
+                        int w = coeff_idx(a, p, b, (c + offset), n_pol, n_beam); // (a, p, b, f, Np, Nb)
+
+			if (a < N_ANT) {
+                                // Conjugated coefficients places the minus operation in the imaginary component
+				reduced_mul[a].x = input_data[i].x * coeff[2*w] + input_data[i].y * coeff[2*w + 1];
+				reduced_mul[a].y = input_data[i].y * coeff[2*w] - input_data[i].x * coeff[2*w + 1];
+			}
+			else {
+				reduced_mul[a].x = 0;
+				reduced_mul[a].y = 0;
+			}
+			__syncthreads();
+
+			for (int k = blockDim.x / 2; k > 0; k >>= 1) {
+				if (a < k) {
+					reduced_mul[a].x += reduced_mul[a + k].x;
+					reduced_mul[a].y += reduced_mul[a + k].y;
+				}
+				__syncthreads();
+			}
+			if (a == 0) {
+				int h1 = coh_bf_idx(p, b, f, (c + offset), s, n_pol, n_beam, n_coarse, n_fine); // coh_bf_idx(p, b, c, f, s, Np, Nb, Nc, Nf)
+				output_data[h1].x = reduced_mul[0].x;
+				output_data[h1].y = reduced_mul[0].y;
+			}
+		}
+	}
+	return;
+}
+
+// Compute power of beamformer output (abs()^2)
+__global__
+void beamformer_power_sti(cuComplex* bf_volt, float* bf_power, int offset, int n_pol, int n_beam, int n_coarse, int n_fine, int n_time_int, int n_sti) {
+	int t = threadIdx.x; // Time sample index
+	int f = blockIdx.x;  // Fine channel index
+	int c = blockIdx.y;  // Coarse channel index
+	int b = blockIdx.z;  // Beam index
+	int s = 0;           // STI window index
+	int h = 0;
+
+	int n_freq_streams = n_chan/N_STREAMS;
+	
+	int xp = coh_bf_idx(0, b, f, (c + offset), t, n_pol, n_beam, n_coarse, n_fine); // X polarization
+	int yp = coh_bf_idx(1, b, f, (c + offset), t, n_pol, n_beam, n_coarse, n_fine); // Y polarization
+        
+	float x_pol_pow; // XX*
+	float y_pol_pow; // YY*
+	float beam_power;
+	//float scale = 1.0; // /n_sti;
+
+	__shared__ float reduced_array[N_STI_BLOC];
+
+	for(s = 0; s<n_sti; s++){
+		h = pow_bf_idx(f, (c + offset), s, b, n_fine, n_coarse, n_sti);
+		if(f < n_freq_streams){	
+			if(n_pol == 1){
+				if (t < n_time_int) {
+					// Power = Absolute value squared of output -> r^2 + i^2
+					//xp = coh_bf_idx(0, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // X polarization
+
+					x_pol_pow = (bf_volt[xp].x * bf_volt[xp].x) + (bf_volt[xp].y * bf_volt[xp].y); // XX*
+
+					beam_power = x_pol_pow; // XX*
+					reduced_array[t] = beam_power;
+				}
+				else{
+					reduced_array[t] = 0.0;
+				}
+				__syncthreads();
+
+				// Reduction is performed by splitting up the threads in each block and summing them all up.
+				// The number of threads in each block needs to be a power of two in order for the reduction to work. (No left over threads).
+				for(int k = blockDim.x/2; k>0; k>>=1){
+					if(t<k){
+						reduced_array[t] += reduced_array[t+k];
+					}
+					__syncthreads();
+				}
+	
+				// After reduction is complete, assign each reduced value to appropriate position in output array.
+				if(t == 0){
+					//int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
+					bf_power[h] = reduced_array[0];
+				}
+			}else if(n_pol == 2){
+				if (t < n_time_int) {
+					// Power = Absolute value squared of output -> r^2 + i^2
+					//xp = coh_bf_idx(0, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // X polarization
+					//yp = coh_bf_idx(1, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // Y polarization
+
+					x_pol_pow = (bf_volt[xp].x * bf_volt[xp].x) + (bf_volt[xp].y * bf_volt[xp].y); // XX*
+					y_pol_pow = (bf_volt[yp].x * bf_volt[yp].x) + (bf_volt[yp].y * bf_volt[yp].y); // YY*
+					beam_power = x_pol_pow + y_pol_pow; // XX* + YY*
+					reduced_array[t] = beam_power;
+				}
+				else{
+					reduced_array[t] = 0.0;
+				}
+				__syncthreads();
+
+				// Reduction is performed by splitting up the threads in each block and summing them all up.
+				// The number of threads in each block needs to be a power of two in order for the reduction to work. (No left over threads).
+				for(int k = blockDim.x/2; k>0; k>>=1){
+					if(t<k){
+						reduced_array[t] += reduced_array[t+k];
+					}
+					__syncthreads();
+				}
+	
+				// After reduction is complete, assign each reduced value to appropriate position in output array.
+				if(t == 0){
+					//int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
+					bf_power[h] = reduced_array[0];
+				}
 			}
 		}
 	}
@@ -192,14 +344,15 @@ void fft_shift(cuComplex* data_in, cuComplex* data_tra, int offset, int n_pol, i
 	return;
 }
 
-
-// Run FFT
-float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_samp) {
+// Run upchannelizer and beamformer
+float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp) {
 
 	cudaError_t err_code;
 
         // Total number of time samples
         int nt = n_win*n_samp;
+
+	int n_sti = n_win/n_time_int; // Number of STI windows
 
 	// Transpose kernel: Specify grid and block dimensions
 	//dim3 dimBlock_transpose(N_ANT, n_pol, 1);
@@ -210,13 +363,26 @@ float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_sam
 	dim3 dimGrid_transpose(N_ANT, n_win, n_chan);
 
 	// FFT shift kernel: Specify grid and block dimensions
-	dim3 dimBlock_fftshift(MAX_THREADS, 1, 1);
-	dim3 dimGrid_fftshift(N_ANT, n_win, n_chan);
+	dim3 dimBlock_fftshift(1, N_ANT, n_pol);
+	dim3 dimGrid_fftshift(n_samp, n_chan, n_win);
+
+	// Coherent beamformer kernel: Specify grid and block dimensions
+	dim3 dimBlock_coh_bf(N_ANT, n_pol, 1);
+	dim3 dimGrid_coh_bf(n_samp, n_chan, n_beam);
+
+	// Output power of beamformer kernel with STI: Specify grid and block dimensions
+	dim3 dimBlock_bf_pow(N_STI_BLOC, 1, 1);
+	dim3 dimGrid_bf_pow(n_samp, n_chan, n_beam);
 
 	signed char* d_data_in = d_data_char;
 	cuComplex* d_data_tra = d_data_comp;
 	cuComplex* d_data_tra2 = d_data_shift;
-	float* data_out = h_fft;
+	float* d_coefficient = d_coeff;
+	float* d_bf_pow = d_coh_bf_pow;
+	float* data_out = h_bf_pow;
+
+	// Copy beamformer coefficients from host to device
+	checkCuda(cudaMemcpy(d_coefficient, h_coefficient, (N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ) * sizeof(float), cudaMemcpyHostToDevice));
 
 	//printf("Before cudaMemcpy(HtoD) coefficients! \n");
 	// Copy input data from host to device
@@ -235,8 +401,17 @@ float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_sam
 	// FFT shift and transpose
 	fft_shift<<<dimGrid_fftshift, dimBlock_fftshift>>>(d_data_tra, d_data_tra2, 0, n_pol, n_chan, n_win, n_samp);
 
+	// Set input of FFT shift to zero so it can be used as the output of the coherent_beamformer
+	set_to_zero();
+
+	// Beamform
+	coherent_beamformer<<<dimGrid_coh_bf, dimBlock_coh_bf>>>(d_data_tra2, d_coefficient, d_data_tra, 0, n_pol, n_samp, n_chan, n_beam, n_win);
+
+	// STI after beamforming
+	beamformer_power_sti<<<dimGrid_bf_pow, dimBlock_bf_pow>>>(d_data_tra, d_bf_pow, 0, n_pol, n_beam, n_chan, n_samp, n_time_int, n_sti);
+
         // Copy input data from device to host
-        checkCuda(cudaMemcpy(data_out, (float *)d_data_tra2, 2*N_ANT*n_pol*nt*n_chan*sizeof(float), cudaMemcpyDeviceToHost));
+        checkCuda(cudaMemcpy(data_out, d_bf_pow, n_beam*n_sti*n_samp*n_chan*sizeof(float), cudaMemcpyDeviceToHost));
 
         return data_out;
 }
@@ -255,7 +430,7 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 	sim flag = 4 -> Simulated cosine wave
 	sim flag = 5 -> Simulated complex exponential i.e. exp(j*2*pi*f0*t)
 	*/
-	int sim_flag = 5;
+	int sim_flag = 0;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
 			if(i < (N_REAL_INPUT/2)){
@@ -355,8 +530,135 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 	return data_sim;
 }
 
+// Generate simulated weights or coefficients
+float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
+	float* coeff_sim;
+	coeff_sim = (float*)calloc(N_COEFF, sizeof(float));
+
+	/*
+	'sim_flag' is a flag that indicates the kind of data that is simulated.
+	sim_flag = 0 -> Ones
+	sim_flag = 1 -> Scale each beam by incrementing value i.e. beam 1 = 1, beam 2 = 2, ..., beam 64 = 64
+	sim_flag = 2 -> Scale each beam by incrementing value in a particular bin (bin 3 and 6 for now). Match simulated data sim_flag = 2
+	sim flag = 3 -> Simulated beams from 58 to 122 degrees. Assuming a ULA.
+        sim_flag = 4 -> One value at one polarization, one element, one beam, and one frequency bin
+	*/
+	int sim_flag = 0;
+	if (sim_flag == 0) {
+		for (int i = 0; i < (((N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ)) / 2); i++) {
+			coeff_sim[2 * i] = 1;
+		}
+	}
+	if (sim_flag == 1) {
+		int tmp = 0;
+		
+                for (int p = 0; p < n_pol; p++) {
+                	for (int f = 0; f < n_chan; f++) {
+				for (int a = 0; a < N_ANT; a++) {
+					for (int b = 0; b < n_beam; b++) {
+						if (tmp >= n_beam) {
+							tmp = 0;
+						}
+						tmp = (tmp + 1) % (n_beam + 1);
+                                		coeff_sim[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = tmp;
+					}
+				}
+                	}
+                }
+		
+	}
+	if (sim_flag == 2) {
+		int tmp = 0;
+		for (int p = 0; p < n_pol; p++) {
+                	for (int f = 0; f < n_chan; f++) {
+				for (int a = 0; a < N_ANT; a++) {
+					for (int b = 0; b < n_beam; b++) {
+						if (tmp >= n_beam) {
+							tmp = 0;
+						}
+						tmp = (tmp + 1) % (n_beam + 1);
+                                		coeff_sim[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = tmp;
+					}
+				}
+                	}
+                }
+	}
+	if (sim_flag == 3) {
+		float c = 3e8; // Speed of light
+		float c_freq = 1.25e9; // Center frequency
+		float lambda = c / c_freq; // Wavelength
+		float d = lambda / 2; // Distance between antennas
+
+		float chan_band = 1; // Fine channel bandwidth in Hz
+		double rf_freqs = 0;
+
+		float theta = 0; // Beam angle from 58 to 122 degrees
+		float tau_beam = 0; // Delay
+
+		int b = 2;
+		for (int f = 0; f < n_chan; f++) {
+			rf_freqs = chan_band * f + c_freq;
+			//for (int b = 0; b < n_beam; b++) {
+				theta = ((b - (n_beam / 2)) + 90)*PI/180; // Beam angle from 58 to 122 degrees - Given SOI at 90 deg or moving across array, the beam with the most power is beamm 33
+				tau_beam = d * cos(theta) / c; // Delay
+				for (int a = 0; a < N_ANT; a++) {
+                                        if(n_pol == 1){
+						// X polarization
+						coeff_sim[2 * coeff_idx(a, 0, b, f, n_pol, n_beam)] = cos(2 * PI * rf_freqs * a * tau_beam);
+						coeff_sim[2 * coeff_idx(a, 0, b, f, n_pol, n_beam) + 1] = sin(2 * PI * rf_freqs * a * tau_beam);
+					}else if(n_pol == 2){
+						// X polarization
+						coeff_sim[2 * coeff_idx(a, 0, b, f, n_pol, n_beam)] = cos(2 * PI * rf_freqs * a * tau_beam);
+						coeff_sim[2 * coeff_idx(a, 0, b, f, n_pol, n_beam) + 1] = sin(2 * PI * rf_freqs * a * tau_beam);
+						// Y polarization
+						coeff_sim[2 * coeff_idx(a, 1, b, f, n_pol, n_beam)] = cos(2 * PI * rf_freqs * a * tau_beam);
+						coeff_sim[2 * coeff_idx(a, 1, b, f, n_pol, n_beam) + 1] = sin(2 * PI * rf_freqs * a * tau_beam);
+					}
+				}
+			//}
+		}
+	}
+        if (sim_flag == 4) {
+        	coeff_sim[2 * coeff_idx(0, 0, 0, 0, n_pol, n_beam)] = 1;
+        }
+
+	return coeff_sim;
+}
+
+// Generate coefficients with delays and phase up solutions from HDF5 file
+float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_chan, uint64_t n_real_ant) {
+	float* coefficients;
+	coefficients = (float*)calloc(N_COEFF, sizeof(float));
+	double tau = 0;
+        int fc = 0; // First frequency channel in the RAW file and on this node
+
+	for (int p = 0; p < n_pol; p++) {
+                // 'schan' is the absolute channel index of the first channel in the RAW file.
+                // The beamformer recipe files contain all of the channels in the band
+                // So 'schan' offsets to start processing with the correct section/range of frequency channels
+		for (int f = 0; f < n_chan; f++) {
+			for (int b = 0; b < n_beam; b++) {
+				for (int a = 0; a < N_ANT; a++) {
+					if(a < n_real_ant){
+						tau = delay[delay_idx(a, b, n, n_real_ant, n_beam)];
+                                                fc = f+schan; // First frequency channel in the RAW file and on this node
+
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = (float)(phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].re*cos(2 * PI * coarse_chan[f] * tau) - phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].im*sin(2 * PI * coarse_chan[f] * tau));
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = (float)(phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].re*sin(2 * PI * coarse_chan[f] * tau) + phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].im*cos(2 * PI * coarse_chan[f] * tau));
+					}else{
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = 0;
+						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = 0;
+					}
+				}
+			}
+		}
+	}
+
+	return coefficients;
+}
+
 // Free memory
-void Cleanup_FFT() {
+void Cleanup_beamformer() {
 	// Free up GPU memory at the end of a program
 	if (d_data_char != NULL) {
 		cudaFree(d_data_char);
@@ -366,6 +668,12 @@ void Cleanup_FFT() {
 	}
 	if (d_data_shift != NULL) {
 		cudaFree(d_data_shift);
+	}
+	if (d_coeff != NULL) {
+		cudaFree(d_coeff);
+	}
+	if (d_coh_bf_pow != NULL) {
+		cudaFree(d_coh_bf_pow);
 	}
 }
 
@@ -386,6 +694,7 @@ float* data_test(signed char *sim_data){
 // a text file for analysis
 int main() {
 	printf("Here!\n");
+	int n_beam = 61;
         int n_pol = 2;
 	// 1k mode
 	//int n_chan = 16; 
@@ -409,18 +718,23 @@ int main() {
         //int nt = 128*1024; // 131072; // 2^17
 
         int n_win = N_TIME_STI;
+	int n_time_int = N_TIME_STI;
         int n_samp = nt/n_win;
 
 	// Allocate memory to all arrays used by run_FFT() 
-	init_FFT();
+	init_beamformer();
 
-        printf("After init_FFT() \n");
+        printf("After init_beamformer() \n");
 
 	// Generate simulated data
 	signed char* sim_data = simulate_data(n_pol, n_chan, nt);
 
         printf("After simulate_data() \n");
 
+	// Generate simulated weights or coefficients
+	float* sim_coefficients = simulate_coefficients(n_pol, n_beam, n_chan);
+
+	printf("After simulate_coefficients(); \n");
 
 	// --------------------- Input data test --------------------- //
 	int input_write = 1; // If input_write is set to 1, the simulated data will be written to a binary file for testing/verification
@@ -462,7 +776,7 @@ int main() {
 	printf("Here6!\n");
 
 	float time_taken = 0;
-	float fft_time = 0;
+	float bf_time = 0;
 	int num_runs = 1;
 
 	// Start timing FFT computation //
@@ -474,26 +788,26 @@ int main() {
 
 		// Run FFT 
                 // Things to keep in mind about FFT output:
-		// - FFT shift required after FFT
+		// - FFT shift possibly required after FFT if too much memory is allocated
 		// - Output may need to be divided number of FFT points
-                output_data = run_FFT(sim_data, n_pol, n_chan, n_win, n_samp);
+                output_data = run_upchannelizer_beamformer(sim_data, sim_coefficients, n_pol, n_beam, n_chan, n_win, n_time_int, n_samp);
 
 		// Stop timing FFT computation //
 		clock_gettime(CLOCK_MONOTONIC, &tval_after);
 		time_taken = (float)(tval_after.tv_sec - tval_before.tv_sec); //*1e6; // Time in seconds since epoch
 		time_taken = time_taken + (float)(tval_after.tv_nsec - tval_before.tv_nsec)*1e-9; // Time in nanoseconds since 'tv_sec - start and end'
-		fft_time += time_taken;
+		bf_time += time_taken;
 	}
-	printf("Average FFT processing time: %f s\n", fft_time/num_runs);
+	printf("Average FFT and beamform processing time: %f s\n", bf_time/num_runs);
 
-	printf("Here7, FFT output: %f \n", output_data[0]);
+	printf("Here7, beamformer output: %f \n", output_data[0]);
 	
 	// Write data to binary file for analysis
 	char output_filename[128];
 
 	printf("Here8!\n");
 
-	strcpy(output_filename, "/datag/users/mruzinda/o/output_d_cufft.bin");
+	strcpy(output_filename, "/datag/users/mruzinda/o/output_d_fft_bf.bin");
 
 	printf("Here9!\n");
 
@@ -505,7 +819,7 @@ int main() {
 
 	printf("Here11!\n");
 
-	fwrite(output_data, sizeof(float), (N_INPUT*n_pol*n_chan*nt)/(N_POL*N_FREQ*N_TIME), output_file);
+	fwrite(output_data, sizeof(float), n_beam*n_chan*n_samp*n_sti, output_file);
 
 	printf("Here12!\n");
 
@@ -521,7 +835,7 @@ int main() {
 	// Free up device memory
 	//cudaFreeHost(h_data);
 	//cudaFreeHost(h_coeff);
-	Cleanup_FFT();
+	Cleanup_beamformer();
 
 	printf("Here11!\n");
 

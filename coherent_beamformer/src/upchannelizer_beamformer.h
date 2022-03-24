@@ -22,15 +22,13 @@
 #define N_BEAM (64) // 64                 // Number of beams
 
 // "2" for inphase and quadrature
-#define N_INPUT       (unsigned long int)(2*N_POL*N_TIME*N_FREQ*N_ANT)       // Size of input. Currently, same size as output
-#define N_REAL_INPUT  (unsigned long int)(2*N_POL*N_TIME*N_FREQ*N_REAL_ANT)  // Size of input. Currently, same size as output
-#define N_COEFF       (unsigned long int)(2*N_POL*N_ANT*N_BEAM*N_FREQ)       // Size of beamformer coefficients
-//#define N_PHASE       (unsigned long int)(2*N_POL*N_ANT)                     // Size of telstate phase solution array - Include frequency dimension from meta data
-#define DELAY_POLYS   (unsigned long int)(2)                                 // Number of coefficients in polynomial
-#define N_DELAYS      (unsigned long int)(DELAY_POLYS*N_ANT*N_BEAM)          // Size of first order polynomial delay array
-#define N_OUTPUT      (unsigned long int)(2*N_POL*N_BEAM*N_FREQ*N_TIME)      // Size of beamformer output
-//#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_TIME)              // Size of beamformer output after abs()^2
-#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_STI)               // Size of beamformer output after abs()^2 and short time integration
+#define N_INPUT       (unsigned long int)(2*N_POL*N_TIME*N_FREQ*N_ANT)                  // Size of input. Currently, same size as output
+#define N_REAL_INPUT  (unsigned long int)(2*N_POL*N_TIME*N_FREQ*N_REAL_ANT)             // Size of input. Currently, same size as output
+#define N_COEFF       (unsigned long int)(2*N_POL*N_ANT*N_BEAM*N_FREQ)                  // Size of beamformer coefficients
+#define DELAY_POLYS   (unsigned long int)(2)                                            // Number of coefficients in polynomial
+#define N_DELAYS      (unsigned long int)(DELAY_POLYS*N_ANT*N_BEAM)                     // Size of first order polynomial delay array
+#define N_OUTPUT      (unsigned long int)(2*N_POL*N_BEAM*N_FREQ*N_TIME)                 // Size of beamformer output
+#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_TIME)                         // Size of beamformer output after abs()^2 and short time integration
 // For cuFFT
 #define RANK                (1)
 //#define BATCH(Np,Nw,Nf)     (N_ANT)*(Np)*(Nw)*(Nf)
@@ -58,21 +56,29 @@
 // b - beam index
 
 #define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
-//#define data_tr_idx(a, p, w, c, t, Np, Nw, Nc)               ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(w) + (Nw)*(Np)*(N_ANT)*(c) + (Nc)*(Nw)*(Np)*(N_ANT)*(t))
 #define data_tr_idx(t, a, p, c, w, Nt, Np, Nc)               ((t) + (Nt)*(a) + (N_ANT)*(Nt)*(p) + (Np)*(N_ANT)*(Nt)*(c) + (Nc)*(Np)*(N_ANT)*(Nt)*(w))
 #define data_fft_out_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
 // The "Nf" below is equal in value to "Nt*Nc" that is the dimension of "t" since this is the number of FFT points muliplied by the number of coarse channels
-#define data_fftshift_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
-//#define data_fft_tr_idx(a, p, w, c, f, Np, Nw, Nc)           ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(w) + (Nw)*(Np)*(N_ANT)*(c) + (Nc)(Nw)*(Np)*(N_ANT)*(f))
+#define data_fftshift_idx(a, p, f, c, w, Np, Nf, Nc)         ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(f) + (Nf)*(Np)*(N_ANT)*(c) + (Nc)*(Nf)*(Np)*(N_ANT)*(w))
+#define coeff_idx(a, p, b, f, Np, Nb)                        ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(b) + (Nb)*(Np)*(N_ANT)*(f))
+//#define phase_idx(a, p, f, Np)                               ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(f))
+//#define delay_idx(d, a, b, Na)                               ((d) + DELAY_POLYS*(a) + DELAY_POLYS*(Na)*(b)) // Should be correct indexing
+#define cal_all_idx(a, p, f, Na, Np)                         ((a) + (Na)*(p) + (Np)*(Na)*(f))
+#define delay_idx(a, b, t, Na, Nb)                           ((a) + (Na)*(b) + (Nb)*(Na)*(t))
+#define coh_bf_idx(p, b, f, c, w, Np, Nb, Nc, Nf)            ((p) + (Np)*(b) + (Nb)*(Np)*(f) + (Nf)*(Nb)*(Np)*(c) + (Nc)*(Nf)*(Nb)*(Np)*(w))
+#define pow_bf_idx(f, c, s, b, Nf, Nc, Ns)                   ((f) + (Nf)*(c) + (Nc)*(Nf)*(s) + (Ns)*(Nc)*(Nf)*(b)) // Changed to efficiently write each beam to a filterbank file
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-void init_FFT(); // Allocate memory to all arrays 
+void init_beamformer(); // Allocate memory to all arrays 
+void set_to_zero(); // Set arrays to zero after a block is processed
 signed char* simulate_data(int n_pol, int n_chan, int nt);
-void Cleanup_FFT();
+float* simulate_coefficients(int n_pol, int n_beam, int n_chan);
+float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_chan, uint64_t n_real_ant);
+void Cleanup_beamformer();
 void upchannelize(cuComplex* data_tra, int n_pol, int n_chan, int n_samp); // Upchannelization
-float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_samp); // Run FFT
+float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp); // Run upchannelizer and beamformer
 #ifdef __cplusplus
 }
 #endif

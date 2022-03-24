@@ -152,46 +152,36 @@ void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int 
 // Perform transpose on the output of the FFT
 __global__
 void fft_shift(cuComplex* data_in, cuComplex* data_tra, int offset, int n_pol, int n_coarse, int n_win, int n_fine) {
-	int f = threadIdx.x; // Fine channel index
-	int a = blockIdx.x;  // Antenna index
-	int w = blockIdx.y;  // Time window index
-	int c = blockIdx.z;  // Coarse channel index
-        int p = 0;           // Polarization index
+        // 'f' is the largest dimension and is sometimes larger than 1024 which is the max number of threads
+        // So 'f' should be the blockIdx.x which has the largest max value (over 2e9 elements)
+        // Since 'f' has to be the fasted moving index for the cufftExecC2C(), but 'a' needs to be the fastest moving index
+        // for beamforming, then threadIdx.x can't be used for 'a' in this case, and threadIdx.y must be used instead.
+        // blockIdx.x can't be a faster moving dimension than threadIdx.x
+	int a = threadIdx.y; // Antenna index
+	int p = threadIdx.z; // Polarization index
+	int f = blockIdx.x;  // Fine channel index
+	int c = blockIdx.y;  // Coarse channel index
+	int w = blockIdx.z;  // Time window index
 
-	int fb = 0; // Index for block of fin channels to compensate max number of threads
-	int Fblocks = n_fine/MAX_THREADS; // Number of blocks of fine channels to process
-	int ff = 0;
         int h_in = 0;
 	int h_sh = 0;
 
+	if(f < (n_fine/2)){
+		h_in = data_fft_out_idx(f, a, p, (c + offset), w, n_fine, n_pol, n_coarse); 
+		h_sh = data_fftshift_idx(a, p, (f+(n_fine/2)), (c + offset), w, n_pol, n_fine, n_coarse);
 
-//#define data_fft_out_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
-//#define data_fftshift_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
+		data_tra[h_sh].x = data_in[h_in].x;
+		data_tra[h_sh].y = data_in[h_in].y;
+	}else if((f >= (n_fine/2)) && (f < n_fine)){
+		h_in = data_fft_out_idx(f, a, p, (c + offset), w, n_fine, n_pol, n_coarse);
+		h_sh = data_fftshift_idx(a, p, (f-(n_fine/2)), (c + offset), w, n_pol, n_fine, n_coarse);
 
-
-
-	for(p=0; p<n_pol; p++){
-		for(fb = 0; fb < Fblocks; fb++){
-			ff = (f + fb*MAX_THREADS);
-			if(ff < (n_fine/2)){
-				h_in = data_fft_out_idx(ff, a, p, (c + offset), w, n_fine, n_pol, n_coarse); 
-				h_sh = data_fftshift_idx((ff+(n_fine/2)), a, p, (c + offset), w, n_fine, n_pol, n_coarse);
-
-				data_tra[h_sh].x = data_in[h_in].x;
-				data_tra[h_sh].y = data_in[h_in].y;
-			}else if((ff >= (n_fine/2)) && (ff < n_fine)){
-				h_in = data_fft_out_idx(ff, a, p, (c + offset), w, n_fine, n_pol, n_coarse);
-				h_sh = data_fftshift_idx((ff-(n_fine/2)), a, p, (c + offset), w, n_fine, n_pol, n_coarse);
-
-				data_tra[h_sh].x = data_in[h_in].x;
-				data_tra[h_sh].y = data_in[h_in].y;
-			}
-		}
+		data_tra[h_sh].x = data_in[h_in].x;
+		data_tra[h_sh].y = data_in[h_in].y;
 	}
 
 	return;
 }
-
 
 // Run FFT
 float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_samp) {
@@ -210,8 +200,12 @@ float* run_FFT(signed char* data_in, int n_pol, int n_chan, int n_win, int n_sam
 	dim3 dimGrid_transpose(N_ANT, n_win, n_chan);
 
 	// FFT shift kernel: Specify grid and block dimensions
-	dim3 dimBlock_fftshift(MAX_THREADS, 1, 1);
-	dim3 dimGrid_fftshift(N_ANT, n_win, n_chan);
+	//dim3 dimBlock_fftshift(MAX_THREADS, 1, 1);
+	//dim3 dimGrid_fftshift(N_ANT, n_win, n_chan);
+
+	// FFT shift kernel: Specify grid and block dimensions
+	dim3 dimBlock_fftshift(1, N_ANT, n_pol);
+	dim3 dimGrid_fftshift(n_samp, n_chan, n_win);
 
 	signed char* d_data_in = d_data_char;
 	cuComplex* d_data_tra = d_data_comp;
