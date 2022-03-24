@@ -1,4 +1,4 @@
-# hpguppi_daq
+# hpguppi_proc
 
 To configure and compile the first time:
 ```
