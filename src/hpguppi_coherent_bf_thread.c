@@ -198,7 +198,7 @@ static void *run(hashpipe_thread_args_t * args)
   H5Tinsert(reim_tid, "r", HOFFSET(complex_t, re), H5T_IEEE_F32LE);
   H5Tinsert(reim_tid, "i", HOFFSET(complex_t, im), H5T_IEEE_F32LE);
 
-  complex_t *cal_all_data;
+  complex_t *cal_all_data = NULL;
   double *delays_data;
   double *time_array_data;
   double *ra_data;
@@ -277,16 +277,23 @@ static void *run(hashpipe_thread_args_t * args)
     
     if (rv!=0){
       wait_count += 1;
-      if(wait_count == 6){
+      if(wait_count == 50){
         wait_count = 0;
         coeff_flag = 0;
         // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
-        free(cal_all_data);
-        free(delays_data);
-        free(time_array_data);
-        free(ra_data);
-        free(dec_data);
-        status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
+        if(cal_all_data != NULL){
+          free(cal_all_data);
+          cal_all_data = NULL;
+          free(delays_data);
+          delays_data = NULL;
+          free(time_array_data);
+          time_array_data = NULL;
+          free(ra_data);
+          ra_data = NULL;
+          free(dec_data);
+          dec_data = NULL;
+          status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
+        }
         for(int b = 0; b < nbeams; b++){
 	  // If file open, close it
           if(fdraw[b] != -1) {
