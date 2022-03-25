@@ -22,9 +22,9 @@ AC_CHECK_LIB([coherent_beamformer], [init_beamformer],
                           AC_MSG_ERROR([CBF library not found])))
 LDFLAGS="${orig_LDFLAGS}"
 
-AC_CHECK_FILE([${CBFDIR}/coherent_beamformer/src/coherent_beamformer_char_in.h],
+AC_CHECK_FILE([${CBFDIR}/include/coherent_beamformer_char_in.h],
               # Found
-              AC_SUBST(CBF_INCDIR,${CBFDIR}/coherent_beamformer/src),
+              AC_SUBST(CBF_INCDIR,${CBFDIR}/include),
               # Not found there, check CBFDIR
               AC_CHECK_FILE([${CBFDIR}/coherent_beamformer_char_in.h],
                             # Found
