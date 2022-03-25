@@ -277,7 +277,7 @@ static void *run(hashpipe_thread_args_t * args)
     
     if (rv!=0){
       wait_count += 1;
-      if(wait_count == 5){
+      if(wait_count == 6){
         wait_count = 0;
         coeff_flag = 0;
         // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
@@ -294,17 +294,15 @@ static void *run(hashpipe_thread_args_t * args)
             close(fdraw[b]);
             // Reset fdraw, got_packet_0, filenum, block_count
             fdraw[b] = -1;
-            if(b == 0){ // These variables only need to be set to zero once
-              got_packet_0 = 0;
-              //filenum = 0;
-              block_count=0;
-              // Print end of recording conditions
-              hashpipe_info(thread_name, "recording stopped: "
-              "pktstart %ld pktstop %ld pktidx %ld",
-              pktstart, pktstop, pktidx);
-            }
           }
         }
+	got_packet_0 = 0;
+        //filenum = 0;
+        block_count=0;
+        // Print end of recording conditions
+        hashpipe_info(thread_name, "recording stopped: "
+        "pktstart %ld pktstop %ld pktidx %ld",
+        pktstart, pktstop, pktidx);
       }
       continue;
     }
@@ -577,7 +575,8 @@ static void *run(hashpipe_thread_args_t * args)
       printf("CBF: Got center frequency, obsfreq = %lf MHz, n. time samples = %d \n", obsfreq, n_samp);
 
       // Size of beamformer output
-      blocksize=((N_BF_POW*n_chan_per_node*n_win)/(N_BEAM*N_FREQ*N_STI))*sizeof(float); 
+      //blocksize=((N_BF_POW*n_chan_per_node*n_win)/(N_BEAM*N_FREQ*N_STI))*sizeof(float); 
+      blocksize= n_chan_per_node*n_win*sizeof(float); 
 
       // If this is a new scan, write headers and so on to new filterbank files
       got_packet_0 = 0;
