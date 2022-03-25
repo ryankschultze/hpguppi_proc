@@ -277,7 +277,7 @@ static void *run(hashpipe_thread_args_t * args)
     
     if (rv!=0){
       wait_count += 1;
-      if(wait_count == 50){
+      if(wait_count == 5){
         wait_count = 0;
         coeff_flag = 0;
         // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size

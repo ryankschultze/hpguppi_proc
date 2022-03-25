@@ -294,6 +294,7 @@ static void *run(hashpipe_thread_args_t * args)
                     }
                 }
                 //printf("RAW INPUT: Got current RAW file: %s\n", cur_fname);
+		sleep(0.1);
             }
             // Now create the basefilename
             // If a '...0000.raw' file exists, that is different from the previous '...0000.raw' file
