@@ -293,7 +293,7 @@ static void *run(hashpipe_thread_args_t * args)
                         strcpy(cur_fname, indir); // Use cur_fname as the current file name variable moving forward
                     }
                 }
-                printf("RAW INPUT: Got current RAW file: %s\n", cur_fname);
+                //printf("RAW INPUT: Got current RAW file: %s\n", cur_fname);
             }
             // Now create the basefilename
             // If a '...0000.raw' file exists, that is different from the previous '...0000.raw' file

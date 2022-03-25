@@ -15,7 +15,7 @@
 #include <cuda_runtime_api.h>
 #include <cufft.h>
 #include <device_launch_parameters.h>
-#include "upchannelizer.h"
+#include "upchannelizer_beamformer.h"
 
 using namespace std;
 
@@ -217,7 +217,7 @@ void coherent_beamformer(cuComplex* input_data, float* coeff, cuComplex* output_
 
 	__shared__ cuFloatComplex reduced_mul[N_ANT];
 
-	int n_freq_streams = n_chan/N_STREAMS;
+	int n_freq_streams = n_coarse/N_STREAMS;
 
 	if(f < n_freq_streams){
 		for (int s = 0; s < n_win; s++) { // STI window index
@@ -263,7 +263,7 @@ void beamformer_power_sti(cuComplex* bf_volt, float* bf_power, int offset, int n
 	int s = 0;           // STI window index
 	int h = 0;
 
-	int n_freq_streams = n_chan/N_STREAMS;
+	int n_freq_streams = n_coarse/N_STREAMS;
 	
 	int xp = coh_bf_idx(0, b, f, (c + offset), t, n_pol, n_beam, n_coarse, n_fine); // X polarization
 	int yp = coh_bf_idx(1, b, f, (c + offset), t, n_pol, n_beam, n_coarse, n_fine); // Y polarization
@@ -430,7 +430,7 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 	sim flag = 4 -> Simulated cosine wave
 	sim flag = 5 -> Simulated complex exponential i.e. exp(j*2*pi*f0*t)
 	*/
-	int sim_flag = 0;
+	int sim_flag = 5;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
 			if(i < (N_REAL_INPUT/2)){
@@ -720,6 +720,7 @@ int main() {
         int n_win = N_TIME_STI;
 	int n_time_int = N_TIME_STI;
         int n_samp = nt/n_win;
+	int n_sti = n_win/N_TIME_STI;
 
 	// Allocate memory to all arrays used by run_FFT() 
 	init_beamformer();
@@ -734,7 +735,7 @@ int main() {
 	// Generate simulated weights or coefficients
 	float* sim_coefficients = simulate_coefficients(n_pol, n_beam, n_chan);
 
-	printf("After simulate_coefficients(); \n");
+	printf("After simulate_coefficients() \n");
 
 	// --------------------- Input data test --------------------- //
 	int input_write = 1; // If input_write is set to 1, the simulated data will be written to a binary file for testing/verification
