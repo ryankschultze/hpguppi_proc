@@ -6,7 +6,7 @@ To configure and compile the first time:
  $ libtoolize
  $ autoconf
  $ autoreconf -is
- $ ./configure --with-libsla=/usr/local/lib --with-libcoherent_beamformer=../lib
+ $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib
  $ make
  ```
 
@@ -14,7 +14,7 @@ To configure and compile any other time after:
 ```
  $ cd src
  $ autoreconf -is
- $ ./configure --with-libsla=/usr/local/lib --with-libcoherent_beamformer=../lib
+ $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib
  $ make
  ```
 

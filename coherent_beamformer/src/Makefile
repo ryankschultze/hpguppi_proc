@@ -46,8 +46,8 @@ clean:
 	rm -f coherent_beamformer
 
 install: coherent_beamformer_char_in.h libcoherent_beamformer.so
-	mkdir -p $(bfincludedir)
-	cp coherent_beamformer_char_in.h $(bfincludedir)
+	#mkdir -p $(bfincludedir)
+	#cp coherent_beamformer_char_in.h $(bfincludedir)
 	mkdir -p $(bflibdir)
 	cp libcoherent_beamformer.so $(bflibdir)
 
