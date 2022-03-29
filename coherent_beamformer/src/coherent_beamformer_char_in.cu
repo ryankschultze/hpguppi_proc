@@ -198,7 +198,7 @@ void beamformer_power_sti(float* bf_volt, float* bf_power, int offset, int n_pol
 	
 	int xp = coh_bf_idx(0, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // X polarization
 	int yp = coh_bf_idx(1, b, (f + offset), s*N_TIME_STI + t, n_pol, n_beam, n_chan); // Y polarization
-        int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
+        int h = pow_bf_idx((f + offset), s, b, n_chan, n_win);
 	float x_pol_pow; // XX*
 	float y_pol_pow; // YY*
 	float beam_power;

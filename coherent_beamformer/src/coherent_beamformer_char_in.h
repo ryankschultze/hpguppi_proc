@@ -56,7 +56,8 @@
 #define delay_idx(a, b, t, Na, Nb)              ((a) + (Na)*(b) + (Nb)*(Na)*(t))
 #define coh_bf_idx(p, b, f, t, Np, Nb, Nf)      ((p) + (Np)*(b) + (Nb)*(Np)*(f) + (Nf)*(Nb)*(Np)*(t))
 #define pow_bf_nosti_idx(b, f, t, Nf, Nt)       ((f) + (Nf)*(t) + (Nf)*(Nt)*(b)) // Changed to efficiently write each beam to a filterbank file
-#define pow_bf_idx(b, f, s, Nf, Ns)             ((f) + (Nf)*(s) + (Nf)*(Ns)*(b)) // Changed to efficiently write each beam to a filterbank file
+#define pow_bf_idx(f, s, b, Nf, Ns)             ((f) + (Nf)*(s) + (Nf)*(Ns)*(b)) // Changed to efficiently write each beam to a filterbank file
+//#define pow_bf_idx(b, f, s, Nf, Ns)             ((f) + (Nf)*(s) + (Nf)*(Ns)*(b)) // Changed to efficiently write each beam to a filterbank file
 
 typedef struct complex_t{
 	float re;

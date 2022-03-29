@@ -34,7 +34,7 @@ N_iq = 2
 
 # data_fftshift_idx(f, a, p, c, w, Nf, Np, Nc)
 # data_fftshift_idx(a, p, f, c, w, n_pol, n_fine, n_coarse);
-# Reshape array to multidimensional -> IQ X Fine channels X Antenna X Polarization X Coarse channels X Time Windows
+# Reshape array to multidimensional -> IQ X Antenna X Polarization X Fine channels X Coarse channels X Time Windows
 contents_array = contents_float[0:(N_coarse*N_win*N_pol*N_ant*N_fine*N_iq)].reshape(N_win,N_coarse,N_fine,N_pol,N_ant,N_iq)
 
 # Initialize real and imaginary components

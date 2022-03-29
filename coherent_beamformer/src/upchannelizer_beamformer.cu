@@ -210,7 +210,7 @@ void fft_shift(cuComplex* data_in, cuComplex* data_tra, int offset, int n_pol, i
 __global__
 void coherent_beamformer(cuComplex* input_data, float* coeff, cuComplex* output_data, int offset, int n_pol, int n_fine, int n_coarse, int n_beam, int n_win) {
 	int a = threadIdx.x; // Antenna index
-	int p = threadIdx.y; // Polarization index
+	//int p = threadIdx.y; // Polarization index
 	int f = blockIdx.x;  // Fine channel index
 	int c = blockIdx.y;  // Coarse channel index
 	int b = blockIdx.z;  // Beam index
@@ -220,33 +220,35 @@ void coherent_beamformer(cuComplex* input_data, float* coeff, cuComplex* output_
 	int n_freq_streams = n_coarse/N_STREAMS;
 
 	if(f < n_freq_streams){
-		for (int s = 0; s < n_win; s++) { // STI window index
+		for (int p = 0; p < n_pol; p++) { // Polarization index
+			for (int s = 0; s < n_win; s++) { // STI window index
 
-			int i = data_fftshift_idx(a, p, f, (c + offset), s, n_pol, n_fine, n_coarse); // data_tr_idx(a, p, (f + offset), t, n_pol, n_chan); // (a, p, f, t, Np, Nf)
-                        int w = coeff_idx(a, p, b, (c + offset), n_pol, n_beam); // (a, p, b, f, Np, Nb)
+				int i = data_fftshift_idx(a, p, f, (c + offset), s, n_pol, n_fine, n_coarse); // data_tr_idx(a, p, (f + offset), t, n_pol, n_chan); // (a, p, f, t, Np, Nf)
+	                        int w = coeff_idx(a, p, b, (c + offset), n_pol, n_beam); // (a, p, b, f, Np, Nb)
 
-			if (a < N_ANT) {
-                                // Conjugated coefficients places the minus operation in the imaginary component
-				reduced_mul[a].x = input_data[i].x * coeff[2*w] + input_data[i].y * coeff[2*w + 1];
-				reduced_mul[a].y = input_data[i].y * coeff[2*w] - input_data[i].x * coeff[2*w + 1];
-			}
-			else {
-				reduced_mul[a].x = 0;
-				reduced_mul[a].y = 0;
-			}
-			__syncthreads();
-
-			for (int k = blockDim.x / 2; k > 0; k >>= 1) {
-				if (a < k) {
-					reduced_mul[a].x += reduced_mul[a + k].x;
-					reduced_mul[a].y += reduced_mul[a + k].y;
+				if (a < N_ANT) {
+	       	                         // Conjugated coefficients places the minus operation in the imaginary component
+					reduced_mul[a].x = input_data[i].x * coeff[2*w] + input_data[i].y * coeff[2*w + 1];
+					reduced_mul[a].y = input_data[i].y * coeff[2*w] - input_data[i].x * coeff[2*w + 1];
+				}
+				else {
+					reduced_mul[a].x = 0;
+					reduced_mul[a].y = 0;
 				}
 				__syncthreads();
-			}
-			if (a == 0) {
-				int h1 = coh_bf_idx(p, b, f, (c + offset), s, n_pol, n_beam, n_coarse, n_fine); // coh_bf_idx(p, b, c, f, s, Np, Nb, Nc, Nf)
-				output_data[h1].x = reduced_mul[0].x;
-				output_data[h1].y = reduced_mul[0].y;
+
+				for (int k = blockDim.x / 2; k > 0; k >>= 1) {
+					if (a < k) {
+						reduced_mul[a].x += reduced_mul[a + k].x;
+						reduced_mul[a].y += reduced_mul[a + k].y;
+					}
+					__syncthreads();
+				}
+				if (a == 0) {
+					int h1 = coh_bf_idx(p, b, f, (c + offset), s, n_pol, n_beam, n_coarse, n_fine); // coh_bf_idx(p, b, c, f, s, Np, Nb, Nc, Nf)
+					output_data[h1].x = reduced_mul[0].x;
+					output_data[h1].y = reduced_mul[0].y;
+				}
 			}
 		}
 	}
@@ -304,7 +306,7 @@ void beamformer_power_sti(cuComplex* bf_volt, float* bf_power, int offset, int n
 	
 				// After reduction is complete, assign each reduced value to appropriate position in output array.
 				if(t == 0){
-					//int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
+					//int h = pow_bf_idx((f + offset), s, b, n_chan, n_win);
 					bf_power[h] = reduced_array[0];
 				}
 			}else if(n_pol == 2){
@@ -334,7 +336,7 @@ void beamformer_power_sti(cuComplex* bf_volt, float* bf_power, int offset, int n
 	
 				// After reduction is complete, assign each reduced value to appropriate position in output array.
 				if(t == 0){
-					//int h = pow_bf_idx(b, (f + offset), s, n_chan, n_win);
+					//int h = pow_bf_idx((f + offset), s, b, n_chan, n_win);
 					bf_power[h] = reduced_array[0];
 				}
 			}
@@ -367,7 +369,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	dim3 dimGrid_fftshift(n_samp, n_chan, n_win);
 
 	// Coherent beamformer kernel: Specify grid and block dimensions
-	dim3 dimBlock_coh_bf(N_ANT, n_pol, 1);
+	dim3 dimBlock_coh_bf(N_ANT, 1, 1);
 	dim3 dimGrid_coh_bf(n_samp, n_chan, n_beam);
 
 	// Output power of beamformer kernel with STI: Specify grid and block dimensions
@@ -430,7 +432,7 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 	sim flag = 4 -> Simulated cosine wave
 	sim flag = 5 -> Simulated complex exponential i.e. exp(j*2*pi*f0*t)
 	*/
-	int sim_flag = 5;
+	int sim_flag = 3;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
 			if(i < (N_REAL_INPUT/2)){
@@ -466,8 +468,10 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 		// data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)
 		for (int p = 0; p < n_pol; p++) {
 			for (int t = (1024*10); t < (nt-(1024*10)); t++) {
+				data_sim[2 * data_in_idx(p, t, 0, 0, 2, n_pol, nt, 1, n_chan)] = 1;
+				data_sim[2 * data_in_idx(p, t, 0, 1, 2, n_pol, nt, 1, n_chan)] = 1;
 				data_sim[2 * data_in_idx(p, t, 0, 2, 2, n_pol, nt, 1, n_chan)] = 1;
-				// data_sim[2 * data_in_idx(p, t, 0, 2, 2, n_pol, nt, 1, n_chan)] = tmp;
+				data_sim[2 * data_in_idx(p, t, 0, 3, 2, n_pol, nt, 1, n_chan)] = 1;
 			}
 		}
 	}
@@ -543,10 +547,11 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 	sim flag = 3 -> Simulated beams from 58 to 122 degrees. Assuming a ULA.
         sim_flag = 4 -> One value at one polarization, one element, one beam, and one frequency bin
 	*/
-	int sim_flag = 0;
+	int sim_flag = 4;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (((N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ)) / 2); i++) {
-			coeff_sim[2 * i] = 1;
+			coeff_sim[2*i] = 1;
+			coeff_sim[2*i + 1] = 1;
 		}
 	}
 	if (sim_flag == 1) {
@@ -559,8 +564,8 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 						if (tmp >= n_beam) {
 							tmp = 0;
 						}
+                                		coeff_sim[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = tmp*0.01;
 						tmp = (tmp + 1) % (n_beam + 1);
-                                		coeff_sim[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = tmp;
 					}
 				}
                 	}
@@ -619,7 +624,11 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 		}
 	}
         if (sim_flag == 4) {
-        	coeff_sim[2 * coeff_idx(0, 0, 0, 0, n_pol, n_beam)] = 1;
+		for(int a = 0; a < N_ANT; a++){
+			for(int f = 0; f < n_chan; f++){
+		        	coeff_sim[2 * coeff_idx(a, 0, 2, f, n_pol, n_beam)] = 1;
+			}
+		}
         }
 
 	return coeff_sim;
@@ -748,7 +757,7 @@ int main() {
 
 		printf("Here1!\n");
 
-		strcpy(input_filename, "/datag/users/mruzinda/i/input_h_cufft.bin");
+		strcpy(input_filename, "/datag/users/mruzinda/i/input_h_fft_bf.bin");
 
 		printf("Here2!\n");
 
