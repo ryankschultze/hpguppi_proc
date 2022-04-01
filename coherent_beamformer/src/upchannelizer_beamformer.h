@@ -83,7 +83,7 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan);
 float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_chan, uint64_t n_real_ant);
 void Cleanup_beamformer();
 void upchannelize(cuComplex* data_tra, int n_pol, int n_chan, int n_samp); // Upchannelization
-float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp); // Run upchannelizer and beamformer
+float* run_upchannelizer_beamformer(signed char* data_in, float* fft_output, float* h_coefficient, int n_pol, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp); // Run upchannelizer and beamformer
 #ifdef __cplusplus
 }
 #endif

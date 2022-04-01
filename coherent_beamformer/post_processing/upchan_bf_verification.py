@@ -7,7 +7,7 @@ import numpy as np
 from numpy.fft import fft, ifft
 
 # Open binary file containing input data to cufft for comparison with nump fft
-filename = "/datag/users/mruzinda/i/input_h_cufft.bin"
+filename = "/datag/users/mruzinda/i/input_h_fft_bf.bin"
 
 # Read file contents: np.fromfile(filename, dtype=float, count=- 1, sep='', offset=0)
 contents_float = np.fromfile(filename, dtype=np.float32)
@@ -161,7 +161,7 @@ plt.subplots_adjust(left=0.1,
                     hspace=0.6)
 
 for ax in axs.flat:
-    ax.set(xlabel='Frequency bins', ylabel='Raw voltage')
+    ax.set(xlabel='Frequency bins', ylabel='Power (arb.)')
 
 # Hide x labels and tick labels for top plots and y ticks for right plots.
 #for ax in axs.flat:
