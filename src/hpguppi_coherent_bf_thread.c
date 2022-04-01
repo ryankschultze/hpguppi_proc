@@ -719,9 +719,9 @@ static void *run(hashpipe_thread_args_t * args)
 
       // Filterbank header values for now
       fb_hdr.telescope_id = 64; // MeerKAT ID (Don't know why it's 64, maybe associated with the number of antennas)
-      fb_hdr.foff = chan_bw*1e-3; // Filterbank channel bandwidth in GHz
+      fb_hdr.foff = chan_bw; // Filterbank channel bandwidth in GHz
       fb_hdr.nchans = n_chan_per_node; // Number of channels in a filterbank file
-      fb_hdr.fch1 = coarse_chan_freq[0]; // Center frequency in GHz
+      fb_hdr.fch1 = coarse_chan_freq[0]*1e3; // Center frequency in GHz
       fb_hdr.tsamp = tbin*N_TIME_STI; // Time interval between output samples
       fb_hdr.tstart = stt_imjd + stt_smjd/86400.0; // tstart for now
       // Write RAW filename to filterbank header
