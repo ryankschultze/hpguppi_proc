@@ -29,7 +29,7 @@ N_fine = (1024*1024)/8 # N_coarse*2^17
 # Reshape array to 3D -> Fine channel X Coarse channel X Time samples X Beams
 contents_array = contents_float[0:(N_time*N_coarse*N_fine*N_beam)].reshape(N_beam,N_time,N_coarse*N_fine)
 
-beam_idx = 0 # beam index to plot
+beam_idx = 2 # beam index to plot
 time_idx = 0 # time sample index to plot
 
 if N_time > 1:
@@ -38,7 +38,7 @@ if N_time > 1:
     # I'm only removing it for the sake of accurate analysis and diagnosis.
     #plt.imshow(contents_array[0:N_time,0:N_fine,beam_idx], extent=[1, N_fine, 1, N_time], aspect='auto', interpolation='bicubic')
     plt.imshow(contents_array[beam_idx,0:N_time,0:(N_coarse*N_fine)], extent=[1, (N_coarse*N_fine), 1, N_time], aspect='auto', interpolation='none')
-    plt.title('Intensity map (Frequency vs. time)')
+    plt.title('Waterfall (Frequency vs. time)')
     plt.ylabel('Time samples')
     plt.xlabel('Frequency bins')
     plt.show()
@@ -48,7 +48,7 @@ if N_time > 1:
 
 # Plot of power spectrum
 plt.plot(contents_array[beam_idx,time_idx,0:(N_coarse*N_fine)])
-plt.title('Power spectrum at a time sample')
+plt.title('Power spectrum')
 plt.xlabel('Frequency bins')
 plt.ylabel('Power (arb.)')
 plt.show()

@@ -128,7 +128,7 @@ for ax in axs.flat:
 plt.show()
 
 plt.imshow(bf_sti[:,:], extent=[1, N_coarse*N_fine, 1, N_beam], aspect='auto', interpolation='none')
-plt.title('Power spectrum waterfall plot, antenna 0 (Frequency vs. time)')
+plt.title('Power spectrum at different beams')
 plt.ylabel('Beam index')
 plt.xlabel('Fine frequency channels')
 plt.show()

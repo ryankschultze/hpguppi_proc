@@ -366,7 +366,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	// Coherent beamformer
 	coherent_beamformer<<<dimGrid_coh_bf, dimBlock_coh_bf>>>(d_data_tra2, d_coefficient, d_data_tra, 0, n_pol, n_samp, n_chan, n_beam, n_win);
 
-	// STI after beamforming
+	// Short time integration after beamforming
 	beamformer_power_sti<<<dimGrid_bf_pow, dimBlock_bf_pow>>>(d_data_tra, d_bf_pow, 0, n_pol, n_beam, n_chan, n_samp, n_time_int, n_sti);
 
         // Copy input data from device to host

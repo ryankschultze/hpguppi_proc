@@ -29,7 +29,7 @@
 #include "ioprio.h"
 
 //#include "hpguppi_time.h"
-#include "coherent_beamformer_char_in.h"
+#include "upchannelizer_beamformer.h"
 
 #include "hashpipe.h"
 
@@ -40,7 +40,7 @@
 // This might change in the near future to make this library completely separate from rawspec
 #include "rawspec_rawutils.h"
 
-#include "hpguppi_databuf.h"
+#include "hpguppi_upchan_databuf.h"
 #include "hpguppi_params.h"
 //#include "hpguppi_pksuwl.h"
 #include "hpguppi_util.h"
