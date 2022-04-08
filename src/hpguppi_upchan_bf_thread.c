@@ -1,4 +1,4 @@
-/* hpguppi_coherent_bf_thread_fb.c
+/* hpguppi_upchan_bf_thread_fb.c
  *
  * Reads HDF5 files containing phase solutions for phasing up, delays and rates for forming
  * beams, and other useful metadata.
@@ -181,6 +181,8 @@ static void *run(hashpipe_thread_args_t * args)
   uint64_t raw_blocsize = 0; // Raw file block size
   int n_samp = 0; // Number of time samples per block in a RAW file
   int n_win = 0; // Number of STI windows in output
+  uint32_t n_raw_blks = 0; // Number of blocks in a RAW file
+  int subband_idx = 0; // Index of subband that ranges from 0 to 15
   double pktidx_time = 0;
   double block_midtime = 0;
   double time_array_midpoint = 0;
@@ -225,6 +227,8 @@ static void *run(hashpipe_thread_args_t * args)
   float coarse_chan_band = 0; // Coarse channel bandwidth
   double coarse_chan_freq[N_FREQ]; // Coarse channel center frequencies in the band 
   int n_chan_per_node = 0; // Number of coarse channels per compute node
+  int n_coarse_proc = 0; // Number of coarse channels processed at a time
+  int n_subbands = 16; // Number of subbands
 
   int sim_flag = 0; // Flag to use simulated coefficients (set to 1) or calculated beamformer coefficients (set to 0)
   // Add if statement for generate_coefficients() function option which has 3 arguments - tau, coarse frequency channel, and epoch
@@ -354,6 +358,8 @@ static void *run(hashpipe_thread_args_t * args)
     hgets(st->buf, "BASEFILE", sizeof(raw_basefilename), raw_basefilename);
     hgets(st->buf, "OUTDIR", sizeof(outdir), outdir);
     //hgetu8(st->buf, "RBLKSIZE", &raw_blocsize); // Raw file block size
+    hgetu4(st->buf, "RAWBLKS", &n_raw_blks); // Number of blocks in a RAW file
+    hgetu4(st->buf, "SUBBAND", &subband_idx); // Get current index of subband being processed
     hashpipe_status_unlock_safe(st);
     //printf("CBF: RAW file base filename from command: %s and outdir is: %s \n", raw_basefilename, outdir);
       
@@ -370,22 +376,25 @@ static void *run(hashpipe_thread_args_t * args)
 
       // Calculate coarse channel center frequencies depending on the mode and center frequency that spans the RAW file
       n_chan_per_node = (int)obsnchan/nants; //((int)fenchan)/n_nodes;
+      n_coarse_proc = n_chan_per_node/n_subbands;
       coarse_chan_band = obsbw/n_chan_per_node; // full_bw/fenchan;
 
       //printf("CBF: Number of channels per node (from RAW file) = %d\n", n_chan_per_node);
       //printf("CBF: Number of antennas (from RAW file) = %d\n", (int)nants);
 
       // Skip zeroth index since the number of coarse channels is even and the center frequency is between the 2 middle channels
-      for(int i=0; i<n_chan_per_node; i++){
+      for(int i=0; i<n_coarse_proc; i++){
         //coarse_chan_freq[i] = (i-((n_chan_per_node-1)/2))*coarse_chan_band + (obsfreq*1e6);
-        coarse_chan_freq[i] = (i-((n_chan_per_node-1)/2))*(chan_bw*1e-3) + (obsfreq*1e-3);
+        coarse_chan_freq[i] = ((i + subband_idx*n_coarse_proc)-((n_chan_per_node-1)/2))*(chan_bw*1e-3) + (obsfreq*1e-3);
         // Equivalent equation //
-        //coarse_chan_freq[i] = (i-(n_chan_per_node/2))*(chan_bw*1e6) + (obsfreq*1e6) + ((chan_bw/2)*1e6);
+        //coarse_chan_freq[i] = ((i + subband_idx*n_coarse_proc)-(n_chan_per_node/2))*(chan_bw*1e-3) + (obsfreq*1e-3) + ((chan_bw/2)*1e-3);
       }
 
       printf("CBF: coarse_chan_freq[%d] = %lf GHz \n", 0, coarse_chan_freq[0]);
-      printf("CBF: coarse_chan_freq[%d] = %lf GHz \n", n_chan_per_node/2, coarse_chan_freq[n_chan_per_node/2]);
-      printf("CBF: coarse_chan_freq[%d] = %lf GHz \n", n_chan_per_node-1, coarse_chan_freq[n_chan_per_node-1]);
+      if(n_coarse_proc > 1){
+        printf("CBF: coarse_chan_freq[%d] = %lf GHz \n", n_coarse_proc/2, coarse_chan_freq[n_coarse_proc/2]);
+      }
+      printf("CBF: coarse_chan_freq[%d] = %lf GHz \n", n_coarse_proc-1, coarse_chan_freq[n_coarse_proc-1]);
 
       printf("CBF: coarse_chan_band = %lf Hz \n", coarse_chan_band);
       printf("CBF: chan_bw = %lf MHz \n", chan_bw);
@@ -574,7 +583,7 @@ static void *run(hashpipe_thread_args_t * args)
       }
 
       // Number of time samples per block in a RAW file
-      n_samp = (int)(raw_blocsize/(2*obsnchan*npol));
+      n_samp = (int)(raw_blocsize*n_raw_blks/(2*obsnchan*npol));
 
       // Number of STI windows
       n_win = n_samp/N_TIME_STI;
@@ -688,7 +697,7 @@ static void *run(hashpipe_thread_args_t * args)
             strcat(fb_basefilename, (char *)src_names_str[b].p);
             printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
-            sprintf(fname, "%s.B0%d.fil",  fb_basefilename, b);
+            sprintf(fname, "%s.SB0%d.B0%d.fil",  fb_basefilename, subband_idx, b);
           }else if(sim_flag == 1){
             sprintf(fname, "%s.B0.fil",  fb_basefilename);
           }
@@ -700,7 +709,7 @@ static void *run(hashpipe_thread_args_t * args)
           strcat(fb_basefilename, (char *)src_names_str[b].p);
           printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
-          sprintf(fname, "%s.B%d.fil", fb_basefilename, b);
+          sprintf(fname, "%s.SB%d.B%d.fil", fb_basefilename, subband_idx, b);
         }
         hashpipe_info(thread_name, "Opening fil file '%s'", fname);
 

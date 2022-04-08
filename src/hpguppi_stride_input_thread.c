@@ -1,4 +1,4 @@
-/* hpguppi_rawfile_input_thread.c
+/* hpguppi_stride_input_thread.c
  *
  * Routine to read GUPPI RAW files and put them 
  * into shared memory blocks. 
@@ -474,6 +474,8 @@ static void *run(hashpipe_thread_args_t * args)
 	    
         // Stride through RAW file to get all time samples for specific subband in the RAW file and place in buffer accordingly
         for(int s = 0; s<n_subband; s++){ // Shift to next subband of 16
+            // Write index of subband to status buffer
+            
             // Start timing read
 #if TIMING
             struct timespec tval_before, tval_after;
