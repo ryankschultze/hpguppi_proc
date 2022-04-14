@@ -30,7 +30,7 @@
 #define VERBOSE 0
 #define TIMING 0
 
-int get_header_size(int fdin, char * header_buf, size_t len)
+static int get_header_size(int fdin, char * header_buf, size_t len)
 {
     int rv;
     int i=0;
@@ -55,7 +55,7 @@ int get_header_size(int fdin, char * header_buf, size_t len)
     return i;
 }
 
-int get_block_size(char * header_buf, size_t len)
+static int get_block_size(char * header_buf, size_t len)
 {
     int i;
     char bs_str[32];
@@ -71,7 +71,7 @@ int get_block_size(char * header_buf, size_t len)
     return blocsize;
 }
 
-int64_t get_cur_pktidx(char * header_buf, size_t len)
+static int64_t get_cur_pktidx(char * header_buf, size_t len)
 {
     int i;
     char bs_str[32];
@@ -87,7 +87,7 @@ int64_t get_cur_pktidx(char * header_buf, size_t len)
     return pktidx;
 }
 
-int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t len)
+static int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t len)
 {
     int i;
     int rv;
@@ -118,7 +118,7 @@ int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t len)
     return pktidx;
 }
 
-int get_piperblk(char * header_buf, size_t len)
+static int get_piperblk(char * header_buf, size_t len)
 {
     int i;
     char bs_str[32];
@@ -134,7 +134,7 @@ int get_piperblk(char * header_buf, size_t len)
     return piperblk;
 }
 
-void set_output_path(char * header_buf, char * outdir, size_t len)
+static void set_output_path(char * header_buf, char * outdir, size_t len)
 {
     int i;
     //Read header loop over the 80-byte records
@@ -145,8 +145,8 @@ void set_output_path(char * header_buf, char * outdir, size_t len)
         }
     }
 }
-
-void set_blocksize(char * header_buf, int blocsize, size_t len)
+/*
+static void set_blocksize(char * header_buf, int blocsize, size_t len)
 {
     int i;
     //Read header loop over the 80-byte records
@@ -158,7 +158,7 @@ void set_blocksize(char * header_buf, int blocsize, size_t len)
     }
 }
 
-ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
+static ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
 {
     ssize_t bytes_read;
     ssize_t total_bytes_read = 0;
@@ -178,6 +178,7 @@ ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
     }
     return total_bytes_read;
 }
+*/
 
 static void *run(hashpipe_thread_args_t * args)
 {
