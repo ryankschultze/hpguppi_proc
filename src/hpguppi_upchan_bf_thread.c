@@ -68,7 +68,7 @@ static int safe_close_all(int *pfd) {
   return 0;
 }
 
-static void
+void
 update_fb_hdrs_from_raw_hdr_cbf(fb_hdr_t fb_hdr, const char *p_rawhdr)
 {
   rawspec_raw_hdr_t raw_hdr;

@@ -33,7 +33,7 @@
 #define VERBOSE 0
 #define TIMING 0
 
-static int get_header_size(int fdin, char * header_buf, size_t len)
+int get_header_size(int fdin, char * header_buf, size_t len)
 {
     int rv;
     int i=0;
@@ -59,14 +59,14 @@ static int get_header_size(int fdin, char * header_buf, size_t len)
 }
 
 // Get file size to determine number of blocks in the file
-static long int get_file_size(int fdin){
+long int get_file_size(int fdin){
     off_t cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
     off_t file_size = lseek(fdin, (size_t)0, SEEK_END);
     lseek(fdin, cur_pos, SEEK_SET);
     return file_size;
 }
 
-static int get_block_size(char * header_buf, size_t len)
+int get_block_size(char * header_buf, size_t len)
 {
     int i;
     char bs_str[32];
@@ -82,7 +82,7 @@ static int get_block_size(char * header_buf, size_t len)
     return blocsize;
 }
 
-static int get_nants(char * header_buf, size_t len)
+int get_nants(char * header_buf, size_t len)
 {
     int i;
     char ants_str[32];
@@ -98,7 +98,7 @@ static int get_nants(char * header_buf, size_t len)
     return nants;
 }
 
-static int get_npol(char * header_buf, size_t len)
+int get_npol(char * header_buf, size_t len)
 {
     int i;
     char npol_str[32];
@@ -117,7 +117,7 @@ static int get_npol(char * header_buf, size_t len)
     return npol;
 }
 
-static int get_obsnchan(char * header_buf, size_t len)
+int get_obsnchan(char * header_buf, size_t len)
 {
     int i;
     char obs_str[32];
@@ -133,7 +133,7 @@ static int get_obsnchan(char * header_buf, size_t len)
     return obsnchan;
 }
 
-static int64_t get_cur_pktidx(char * header_buf, size_t len)
+int64_t get_cur_pktidx(char * header_buf, size_t len)
 {
     int i;
     char bs_str[32];
@@ -149,7 +149,7 @@ static int64_t get_cur_pktidx(char * header_buf, size_t len)
     return pktidx;
 }
 
-static int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t len)
+int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t len)
 {
     int i;
     int rv;
@@ -180,7 +180,7 @@ static int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t 
     return pktidx;
 }
 
-static int get_piperblk(char * header_buf, size_t len)
+int get_piperblk(char * header_buf, size_t len)
 {
     int i;
     char bs_str[32];
@@ -196,7 +196,7 @@ static int get_piperblk(char * header_buf, size_t len)
     return piperblk;
 }
 
-static void set_output_path(char * header_buf, char * outdir, size_t len)
+void set_output_path(char * header_buf, char * outdir, size_t len)
 {
     int i;
     //Read header loop over the 80-byte records
@@ -207,8 +207,8 @@ static void set_output_path(char * header_buf, char * outdir, size_t len)
         }
     }
 }
-/*
-static void set_blocksize(char * header_buf, int blocsize, size_t len)
+
+void set_blocksize(char * header_buf, int blocsize, size_t len)
 {
     int i;
     //Read header loop over the 80-byte records
@@ -220,7 +220,7 @@ static void set_blocksize(char * header_buf, int blocsize, size_t len)
     }
 }
 
-static ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
+ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
 {
     ssize_t bytes_read;
     ssize_t total_bytes_read = 0;
@@ -240,7 +240,7 @@ static ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
     }
     return total_bytes_read;
 }
-*/
+
 static void *run(hashpipe_thread_args_t * args)
 {
     hpguppi_input_databuf_t *db  = (hpguppi_input_databuf_t *)args->obuf;

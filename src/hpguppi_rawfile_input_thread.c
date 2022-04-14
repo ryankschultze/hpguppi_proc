@@ -178,7 +178,7 @@ static ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
     }
     return total_bytes_read;
 }
-*/
+*/ 
 
 static void *run(hashpipe_thread_args_t * args)
 {
