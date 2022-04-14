@@ -15,7 +15,12 @@
 
 #define N_INPUT_BLOCKS 3 // 24
 #define BLOCK_HDR_SIZE  (5*80*512)      // in bytes, from guppi_daq_server
+#define UPCHAN_FLAG 1
+#if UPCHAN_FLAG == 1
+#define BLOCK_DATA_SIZE (1024*1024*1024) // in bytes, from guppi_daq_server
+#else
 #define BLOCK_DATA_SIZE (128*1024*1024) // in bytes, from guppi_daq_server
+#endif
 
 typedef struct hpguppi_input_block {
   char hdr[BLOCK_HDR_SIZE];

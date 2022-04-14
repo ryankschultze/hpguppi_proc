@@ -22,7 +22,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "hashpipe.h"
-#include "hpguppi_upchan_databuf.h"
+#include "hpguppi_databuf.h"
 #include "hpguppi_params.h"
 
 #include "upchannelizer_beamformer.h"
@@ -260,7 +260,6 @@ static void *run(hashpipe_thread_args_t * args)
     int n_subband = 16;       // Number of sub bands processed serially
     int n_coarse_proc = 0;    // Number of coarse channels processed at one time
     int n_samp_per_block = 0; // Number of time sample in one block
-    int n_fft = 0;            // Number of FFT points depending on 1k, 4k, or 32k mode
     int piperblk;
     int64_t cur_pktidx;
     int64_t nxt_pktidx;
@@ -459,23 +458,14 @@ static void *run(hashpipe_thread_args_t * args)
         obsnchan = get_obsnchan(header_buf, MAX_HDR_SIZE);
         n_blocks = raw_file_size/(headersize + blocsize);
         n_coarse = (int)obsnchan/nants;
-        // Number of FFT points in 1k, 4k, or 32k mode
-        if(n_coarse == 16){ // 1k mode
-            n_fft = 524288;
-        }
-        if(n_coarse == 64){ // 4k mode
-            n_fft = 131072;
-        }
-        if(n_coarse == 512){ // 32k mode
-            n_fft = 16384;
-        }
         n_coarse_proc = n_coarse/n_subband;
         n_samp_per_block = (int)(blocsize/(2*obsnchan*npol));
 	    
         // Stride through RAW file to get all time samples for specific subband in the RAW file and place in buffer accordingly
         for(int s = 0; s<n_subband; s++){ // Shift to next subband of 16
             // Write index of subband to status buffer
-            
+            hputi4(st.buf, "SUBBAND", s);
+
             // Start timing read
 #if TIMING
             struct timespec tval_before, tval_after;
@@ -527,16 +517,6 @@ static void *run(hashpipe_thread_args_t * args)
                     obsnchan = get_obsnchan(header_buf, MAX_HDR_SIZE);
                     n_blocks = raw_file_size/(headersize + blocsize);
                     n_coarse = (int)obsnchan/nants;
-                    // Number of FFT points in 1k, 4k, or 32k mode
-                    if(n_coarse == 16){ // 1k mode
-                        n_fft = 524288;
-                    }
-                    if(n_coarse == 64){ // 4k mode
-                        n_fft = 131072;
-                    }
-                    if(n_coarse == 512){ // 32k mode
-                        n_fft = 16384;
-                    }
                     n_coarse_proc = n_coarse/n_subband;
                     n_samp_per_block = (int)(blocsize/(2*obsnchan*npol));
 
@@ -696,6 +676,7 @@ static void *run(hashpipe_thread_args_t * args)
                 }
             }
 
+#if TIMING
             // Stop timing read
             clock_gettime(CLOCK_MONOTONIC, &tval_after);
             time_taken_r = (float)(tval_after.tv_sec - tval_before.tv_sec); //*1e6; // Time in seconds since epoch
@@ -703,6 +684,7 @@ static void *run(hashpipe_thread_args_t * args)
             read_time = time_taken_r;
 
             printf("RAW INPUT: Time taken to read from RAW file = %f ms \n", read_time);
+#endif
 
             if(block_count == 0){
                 printf("RAW INPUT: Number of bytes read in read(): %zd \n", read_blocsize);

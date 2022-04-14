@@ -76,14 +76,18 @@ typedef struct complex_t{
 #ifdef __cplusplus
 extern "C" {
 #endif
-void init_beamformer(); // Allocate memory to all arrays 
+void init_upchan_beamformer(); // Allocate memory to all arrays 
 void set_to_zero(); // Set arrays to zero after a block is processed
 signed char* simulate_data(int n_pol, int n_chan, int nt);
 float* simulate_coefficients(int n_pol, int n_beam, int n_chan);
-float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_chan, uint64_t n_real_ant);
+float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant);
+//void input_data_pin(signed char * data_in_pin);
+//void output_data_pin(float * data_out_pin);
+//void coeff_pin(float * data_coeff_pin);
+//void unregister_data(void * data_unregister);
 void Cleanup_beamformer();
-void upchannelize(cuComplex* data_tra, int n_pol, int n_chan, int n_samp); // Upchannelization
-float* run_upchannelizer_beamformer(signed char* data_in, float* fft_output, float* h_coefficient, int n_pol, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp); // Run upchannelizer and beamformer
+void upchannelize(complex_t* data_tra, int n_pol, int n_chan, int n_samp); // Upchannelization
+float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp); // Run upchannelizer and beamformer
 #ifdef __cplusplus
 }
 #endif

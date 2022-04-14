@@ -56,7 +56,7 @@ float* d_coh_bf_pow = NULL;
 float* h_bf_pow = NULL;
 
 // Allocate memory to all arrays 
-void init_beamformer() {
+void init_upchan_beamformer() {
 	printf("Here In init_FFT()! \n");
 
 	// Allocate memory for input data float type
@@ -117,7 +117,7 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 
 
 // Perform FFT
-void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int n_samp){
+void upchannelize(complex_t* data_tra, int n_pol, int n_chan, int n_win, int n_samp){
         cufftHandle plan;
 
 	// Setup the cuFFT plan
@@ -130,7 +130,7 @@ void upchannelize(cufftComplex* data_tra, int n_pol, int n_chan, int n_win, int 
 	int h = 0;
 	for(int w = 0; w < n_win; w++){
 		h = data_tr_idx(0, 0, 0, 0, w, n_samp, n_pol, n_chan);
-		if (cufftExecC2C(plan, &data_tra[h], &data_tra[h], CUFFT_FORWARD) != CUFFT_SUCCESS){
+		if (cufftExecC2C(plan, (cufftComplex*)&data_tra[h], (cufftComplex*)&data_tra[h], CUFFT_FORWARD) != CUFFT_SUCCESS){
 			fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
 			return;	
 		}
@@ -355,7 +355,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	}
 
         // Upchannelize the data
-        upchannelize((cufftComplex*)d_data_tra, n_pol, n_chan, n_win, n_samp);
+        upchannelize((complex_t*)d_data_tra, n_pol, n_chan, n_win, n_samp);
 
 	// FFT shift and transpose
 	fft_shift<<<dimGrid_fftshift, dimBlock_fftshift>>>(d_data_tra, d_data_tra2, 0, n_pol, n_chan, n_win, n_samp);
@@ -581,7 +581,7 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 }
 
 // Generate coefficients with delays and phase up solutions from HDF5 file
-float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_chan, uint64_t n_real_ant) {
+float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant) {
 	float* coefficients;
 	coefficients = (float*)calloc(N_COEFF, sizeof(float));
 	double tau = 0;
@@ -591,7 +591,7 @@ float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* 
                 // 'schan' is the absolute channel index of the first channel in the RAW file.
                 // The beamformer recipe files contain all of the channels in the band
                 // So 'schan' offsets to start processing with the correct section/range of frequency channels
-		for (int f = 0; f < n_chan; f++) {
+		for (int f = subband_idx*n_coarse; f < ((subband_idx*n_coarse) + (n_coarse-1)); f++) {
 			for (int b = 0; b < n_beam; b++) {
 				for (int a = 0; a < N_ANT; a++) {
 					if(a < n_real_ant){
@@ -669,9 +669,9 @@ int main() {
 	int n_sti = n_win/N_TIME_STI;
 
 	// Allocate memory to all arrays used by run_FFT() 
-	init_beamformer();
+	init_upchan_beamformer();
 
-        printf("After init_beamformer() \n");
+        printf("After init_upchan_beamformer() \n");
 
 	// Generate simulated data
 	signed char* sim_data = simulate_data(n_pol, n_chan, nt);

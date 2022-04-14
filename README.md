@@ -6,7 +6,7 @@ To configure and compile the first time:
  $ libtoolize
  $ autoconf
  $ autoreconf -is
- $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib
+ $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib --with-libupchannelizer_beamformer=../lib
  $ make
  ```
 
@@ -14,7 +14,7 @@ To configure and compile any other time after:
 ```
  $ cd src
  $ autoreconf -is
- $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib
+ $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib --with-libupchannelizer_beamformer=../lib
  $ make
  ```
 
@@ -30,6 +30,6 @@ If python library is required:
 ```
  $ cd src
  $ autoreconf -is
- $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib --with-libpython3.7m=/opt/conda/lib
+ $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib --with-libupchan_beamformer=../lib --with-libpython3.7m=/opt/conda/lib
  $ make
  ```

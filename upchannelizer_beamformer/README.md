@@ -1,10 +1,10 @@
-Upchannelizer library
+Upchannelizer beamformer library
 
 To compile the standalone code, make sure the main() function in the .cu script is uncommented and use this command:
-- nvcc -o upchannelizer.exe -arch=sm_86 upchannelizer.cu -lcufft
+- nvcc -o upchannelizer_beamformer.exe -arch=sm_86 upchannelizer_beamformer.cu -lcufft
 
 And to run the executable:
-- ./upchannelizer.exe
+- ./upchannelizer_beamformer.exe
 
 The post-processing scripts in the post_processing directory are used for analysis and verification.
 

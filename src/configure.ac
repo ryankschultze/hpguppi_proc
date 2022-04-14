@@ -34,6 +34,9 @@ AX_CHECK_RAWSPEC
 # Check for coherent beamformer
 AX_CHECK_CBF
 
+# Check for upchannelizer beamformer
+AX_CHECK_UBF
+
 # # Check for python3.7m
 #AX_CHECK_PY
 
@@ -48,6 +51,12 @@ AC_ARG_WITH([libcoherent_beamformer],
                            [Location of CBF library]),
             [LIBCBFDIR="$withval"],
             [LIBCBFDIR="."])
+
+AC_ARG_WITH([libupchannelizer_beamformer],
+            AC_HELP_STRING([--with-libupchannelizer_beamformer=DIR],
+                           [Location of UBF library]),
+            [LIBUBFDIR="$withval"],
+            [LIBUBFDIR="."])
 
 #AC_ARG_WITH([libpython3.7m],
 #            AC_HELP_STRING([--with-libpython3.7m=DIR],

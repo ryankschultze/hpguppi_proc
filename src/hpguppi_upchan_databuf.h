@@ -1,9 +1,9 @@
-/* hpguppi_databuf.h
+/* hpguppi_upchan_databuf.h
  *
  * Defines shared mem structure for data passing.
  */
-#ifndef _HPGUPPI_DATABUF_H
-#define _HPGUPPI_DATABUF_H
+#ifndef _HPGUPPI_UPCHAN_DATABUF_H
+#define _HPGUPPI_UPCHAN_DATABUF_H
 
 #include <stdint.h>
 #include "hashpipe_databuf.h"
@@ -182,4 +182,4 @@ int guppi_databuf_set_free(struct guppi_databuf *d, int block_id);
 #endif // OLD STUFF
 
 
-#endif // _HPGUPPI_DATABUF_H
+#endif // _HPGUPPI_UPCHAN_DATABUF_H
