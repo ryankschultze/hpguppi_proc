@@ -55,6 +55,14 @@ static int get_header_size(int fdin, char * header_buf, size_t len)
     return i;
 }
 
+// Get file size to determine number of blocks in the file
+static long int get_file_size(int fdin){
+    off_t cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
+    off_t file_size = lseek(fdin, (size_t)0, SEEK_END);
+    lseek(fdin, cur_pos, SEEK_SET);
+    return file_size;
+}
+
 static int get_block_size(char * header_buf, size_t len)
 {
     int i;
@@ -235,6 +243,8 @@ static void *run(hashpipe_thread_args_t * args)
     int rv;
     int block_idx = 0;
     int block_count=0, filenum=0;
+    long int raw_file_size = 0;
+    long int cur_pos = 0;
     int blocsize;
     int piperblk;
     int64_t pktstart;
@@ -382,6 +392,9 @@ static void *run(hashpipe_thread_args_t * args)
                 hashpipe_error(__FUNCTION__,"Error opening file.");
                 pthread_exit(NULL);
             }
+
+            // Get raw file size in order to calculate the number of blocks in the file
+            raw_file_size = get_file_size(fdin);
         }
 
         // If a block is missing, copy a block of zeros to the buffer in it's place
@@ -422,6 +435,7 @@ static void *run(hashpipe_thread_args_t * args)
             struct timespec tval_before, tval_after;
             clock_gettime(CLOCK_MONOTONIC, &tval_before);
 #endif
+
             // Initialize block in buffer
             ptr = hpguppi_databuf_data(db, block_idx);
             lseek(fdin, headersize-MAX_HDR_SIZE, SEEK_CUR);
@@ -443,32 +457,65 @@ static void *run(hashpipe_thread_args_t * args)
                 if(prev_pktidx == 0){
                     prev_pktidx = pktstart;
                 }
-                // If cur_pktidx - prev_pktidx > piperblk, calculate the number of missed blocks
+                // If (cur_pktidx - prev_pktidx) > piperblk, calculate the number of missed blocks
                 // and start over to write zero blocks to shared memory buffer
-                if(piperblk < (cur_pktidx - prev_pktidx)){
+                if((cur_pktidx - prev_pktidx) > piperblk){
                     n_missed_blks = ((cur_pktidx - prev_pktidx)/piperblk)-1; // Minus 1 because the block with the prev_pktidx has data
                     zero_blk_pktidx = cur_pktidx;
                     continue;
                 }
+                // Set previous PKTIDX
                 prev_pktidx = cur_pktidx;
             }
 
-            // If cur_pktidx >= pktstop, we have reaced the end of the file
-            if(cur_pktidx >= pktstop){
-                close(fdin);
-                filenum++;
+            // Get the current position of the file
+            cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
+
+            // Sometimes there might be headers with no data blocks remaining in the RAW file
+            // So copy zero blocks to buffer blocks with the appropriate header
+            if((cur_pos+blocsize) > raw_file_size){
+                // If we reach the last header with no data block,
+                // then move on to the next RAW file or wait for one
+                if(cur_pos >= (raw_file_size-headersize)){
+                    close(fdin);
+                    filenum++;
             
-                sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
-                printf("RAW INPUT: Opening next raw file '%s'\n", fname);
-                fdin = open(fname, open_flags, 0644);
-                if (fdin==-1) {
-                    filenum=0;
+                    sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
+                    printf("RAW INPUT: Opening next raw file '%s'\n", fname);
+                    fdin = open(fname, open_flags, 0644);
+                    if (fdin==-1) { // End of a sequence of RAW files corresponding to a scan
+                        filenum=0;
+
+                        // If PKTIDX < PKTSTOP and we're at the end of the scan then set PKTIDX == PKTSTOP 
+                        // and copy a dummy block to the buffer
+                        if(cur_pktidx < pktstop){
+                            // Send dummy block with PKTIDX set to PKTSTOP
+                            set_pktidx(header_buf, pktstop, MAX_HDR_SIZE);
+                        }
+                        // Reset previous pktidx to 0 for the next scan
+                        prev_pktidx = 0;
+                    }
+                    block_count=0;
                 }
 
-                prev_pktidx = 0;
-                block_count=0;
+                // Write blocks of zeros to the shared memory buffer blocks
+                // Copy block of zeros to block in buffer
+                memcpy(ptr, zero_blk, N_INPUT);
+
+                // Mark block as full
+                hpguppi_input_databuf_set_filled(db, block_idx);
+
+                // Setup for next block
+                block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
+
+                // If we haven't reached the last header, then increment block_count (the index of the RAW file block)
+                if(cur_pos < (raw_file_size-headersize)){
+                    block_count++;
+                }
+                
                 continue;
             }
+
 #if VERBOSE
             printf("RAW INPUT: Block size: %d, and  BLOCK_DATA_SIZE: %d \n", blocsize, BLOCK_DATA_SIZE);
             printf("RAW INPUT: header size: %d, and  MAX_HDR_SIZE: %d \n", headersize, MAX_HDR_SIZE);
@@ -494,6 +541,61 @@ static void *run(hashpipe_thread_args_t * args)
 
             printf("RAW INPUT: Time taken to read from RAW file = %f ms \n", read_time);
 #endif
+
+            // Get the current position of the file
+            cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
+
+            // If (cur_pos > (raw_file_size-blocsize)) && (cur_pos <= raw_file_size),
+            // then we have reached the end of a file so move on to next file or wait 
+            // for new file and set PKTIDX == PKTSTOP if necessary
+            if((cur_pos > (raw_file_size-blocsize)) && (cur_pos <= raw_file_size)){
+                close(fdin);
+                filenum++;
+            
+                sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
+                printf("RAW INPUT: Opening next raw file '%s'\n", fname);
+                fdin = open(fname, open_flags, 0644);
+                if (fdin==-1) { // End of a sequence of RAW files corresponding to a scan
+                    filenum=0;
+
+                    // Inform the downstream thread that we have reached the end of a scan
+                    if(cur_pktidx < pktstop){
+                        // Mark block as full
+                        hpguppi_input_databuf_set_filled(db, block_idx);
+
+                        // Setup for next block
+                        block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
+
+                        // Send dummy block with PKTIDX set to PKTSTOP
+                        set_pktidx(header_buf, pktstop, MAX_HDR_SIZE);
+
+                        // Create a header for a dummy block
+                        header = hpguppi_databuf_header(db, block_idx);
+                        hashpipe_status_lock_safe(&st);
+                        hputs(st.buf, status_key, "receiving");
+                        memcpy(header, &header_buf, headersize);
+                        hashpipe_status_unlock_safe(&st);
+
+                        // Initialize block
+                        ptr = hpguppi_databuf_data(db, block_idx);
+
+                        // Copy block of zeros to block in buffer
+                        memcpy(ptr, zero_blk, N_INPUT);
+                    }
+                    // Reset previous pktidx to 0 for the next scan
+                    prev_pktidx = 0;
+                }
+
+                // Mark block as full
+                hpguppi_input_databuf_set_filled(db, block_idx);
+
+                // Setup for next block
+                block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
+
+                // Reset block_count to 0 (the block index of the RAW file)
+                block_count=0;
+                continue;
+            }
         } else if(n_missed_blks > 0){
             // Copy the same header info from previous block to zero block in buffer
             header = hpguppi_databuf_header(db, block_idx);
@@ -529,7 +631,7 @@ static void *run(hashpipe_thread_args_t * args)
                 memcpy(header, &header_buf, headersize);
                 hashpipe_status_unlock_safe(&st);
 
-                // Copy block of zeros to block in buffer
+                // Initialize block in buffer
                 ptr = hpguppi_databuf_data(db, block_idx);
 
                 read_blocsize = read(fdin, ptr, blocsize);
@@ -539,6 +641,7 @@ static void *run(hashpipe_thread_args_t * args)
 #if VERBOSE
                 printf("RAW INPUT: First element of buffer: %d \n", ptr[0]);
 #endif
+                // Set previous PKTIDX
                 prev_pktidx = cur_pktidx;
             }
         }

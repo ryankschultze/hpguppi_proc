@@ -263,7 +263,7 @@ static void *run(hashpipe_thread_args_t * args)
     input_data_pin((signed char *)&db->block[i].data);
   }
 
-  int wait_count = 0;
+  int rec_stop = 0;
   while (run_threads()) {
 
     /* Note waiting status */
@@ -276,46 +276,47 @@ static void *run(hashpipe_thread_args_t * args)
     // if(rv!=0)continue;
     
     if (rv!=0){
-      if(strlen(raw_basefilename) != 0){
-        wait_count += 1;
-        if(wait_count == 50){
-          wait_count = 0;
-          coeff_flag = 0;
-          // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
-          if(cal_all_data != NULL){
-            free(cal_all_data);
-            cal_all_data = NULL;
-            free(delays_data);
-            delays_data = NULL;
-            free(time_array_data);
-            time_array_data = NULL;
-            free(ra_data);
-            ra_data = NULL;
-            free(dec_data);
-            dec_data = NULL;
-            status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
+      if(pktidx >= pktstop){
+        coeff_flag = 0;
+        // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
+        if(cal_all_data != NULL){
+          free(cal_all_data);
+          cal_all_data = NULL;
+          free(delays_data);
+          delays_data = NULL;
+          free(time_array_data);
+          time_array_data = NULL;
+          free(ra_data);
+          ra_data = NULL;
+          free(dec_data);
+          dec_data = NULL;
+          status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
+        }
+        for(int b = 0; b < nbeams; b++){
+          // If file open, close it
+          if(fdraw[b] != -1) {
+            // Close file
+            close(fdraw[b]);
+            // Reset fdraw, got_packet_0, filenum, block_count
+            fdraw[b] = -1;
           }
-          for(int b = 0; b < nbeams; b++){
-            // If file open, close it
-            if(fdraw[b] != -1) {
-              // Close file
-              close(fdraw[b]);
-              // Reset fdraw, got_packet_0, filenum, block_count
-              fdraw[b] = -1;
-            }
-          }
-          got_packet_0 = 0;
-          //filenum = 0;
-          block_count=0;
-          // Print end of recording conditions
-          hashpipe_info(thread_name, "recording stopped: "
+        }
+        got_packet_0 = 0;
+        //filenum = 0;
+        block_count=0;
+        // Print end of recording conditions only once
+        if(rec_stop == 0){
+          rec_stop = 1;
+          hashpipe_info(thread_name, "reached end of scan: "
           "pktstart %ld pktstop %ld pktidx %ld",
           pktstart, pktstop, pktidx);
         }
       }
+      
       continue;
     }
-    if(wait_count > 0)wait_count = 0;
+    rec_stop = 0;
+    //if(wait_count > 0)wait_count = 0;
 
     /* Read param struct for this block */
     ptr = hpguppi_databuf_header(db, curblock);
