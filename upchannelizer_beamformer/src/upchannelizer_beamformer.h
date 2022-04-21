@@ -55,7 +55,8 @@
 // a - antenna index
 // b - beam index
 
-#define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
+//#define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
+#define data_in_idx(p, c, a, t, w, Np, Nc, Na, Nt)           ((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(w))
 #define data_tr_idx(t, a, p, c, w, Nt, Np, Nc)               ((t) + (Nt)*(a) + (N_ANT)*(Nt)*(p) + (Np)*(N_ANT)*(Nt)*(c) + (Nc)*(Np)*(N_ANT)*(Nt)*(w))
 #define data_fft_out_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
 // The "Nf" below is equal in value to "Nt*Nc" that is the dimension of "t" since this is the number of FFT points muliplied by the number of coarse channels
@@ -87,7 +88,7 @@ float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* 
 //void unregister_data(void * data_unregister);
 void Cleanup_beamformer();
 void upchannelize(complex_t* data_tra, int n_pol, int n_chan, int n_samp); // Upchannelization
-float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp); // Run upchannelizer and beamformer
+float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_ant, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp); // Run upchannelizer and beamformer
 #ifdef __cplusplus
 }
 #endif

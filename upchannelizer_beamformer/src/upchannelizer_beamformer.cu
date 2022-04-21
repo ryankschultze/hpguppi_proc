@@ -21,7 +21,7 @@ using namespace std;
 
 // Perform transpose on the data and convert to floats
 __global__
-void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_win, int n_samp);
+void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_samp);
 
 // Perform transpose on the output of the FFT
 __global__
@@ -91,7 +91,7 @@ void set_to_zero(){
 
 // Perform transpose on the data and convert to floats
 __global__
-void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_win, int n_samp) {
+void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_samp) {
 	int t = threadIdx.x; // Time sample index
 	int a = blockIdx.x;  // Antenna index
 	int w = blockIdx.y;  // Time window index
@@ -104,7 +104,7 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 	for(p=0; p<n_pol; p++){
 		for(tb = 0; tb < TS; tb++){
 		// If the input data is not float e.g. signed char, just multiply it by '1.0f' to convert it to a float
-			int h_in = data_in_idx(p, t + tb*MAX_THREADS, w, (c + offset), a, n_pol, n_samp, n_win, n_chan);
+                        int h_in = data_in_idx(p, (c + offset), a, t + tb*MAX_THREADS, w, n_pol, n_chan, n_ant, n_samp); 
 			int h_tr = data_tr_idx(t + tb*MAX_THREADS, a, p, (c + offset), w, n_samp, n_pol, n_chan);
 
 			data_tra[h_tr].x = data_in[2*h_in]*1.0f;
@@ -308,7 +308,7 @@ void beamformer_power_sti(cuComplex* bf_volt, float* bf_power, int offset, int n
 }
 
 // Run upchannelizer and beamformer
-float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp) {
+float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_ant, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp) {
 
 	cudaError_t err_code;
 
@@ -348,7 +348,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	checkCuda(cudaMemcpy(d_data_in, data_in, 2*N_ANT*n_pol*nt*n_chan*sizeof(signed char), cudaMemcpyHostToDevice));
 
         // Perform transpose on the data and convert to floats  
-        data_transpose<<<dimGrid_transpose, dimBlock_transpose>>>(d_data_in, d_data_tra, 0, n_pol, n_chan, n_win, n_samp);
+        data_transpose<<<dimGrid_transpose, dimBlock_transpose>>>(d_data_in, d_data_tra, 0, n_pol, n_chan, n_ant, n_samp);
         err_code = cudaGetLastError();
 	if (err_code != cudaSuccess) {
 		printf("FFT: data_transpose() kernel Failed: %s\n", cudaGetErrorString(err_code));
@@ -403,8 +403,8 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 		for (int p = 0; p < n_pol; p++) {
 			for (int t = 0; t < nt; t++) {
 				for (int a = 0; a < N_ANT; a++) {
-					if(a < N_REAL_ANT){
-						data_sim[2 * data_in_idx(p, t, 0, 2, a, n_pol, nt, 1, n_chan)] = 1;
+					if(a < N_REAL_ANT){ 
+						data_sim[2 * data_in_idx(p, 2, a, t, 0, n_pol, n_chan, N_ANT, nt)] = 1;
 					}
 				}
 			}
@@ -413,7 +413,7 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 	if (sim_flag == 2) {
 		for (int p = 0; p < n_pol; p++) {
 			for (int t = 0; t < nt; t++) {
-				data_sim[2 * data_in_idx(p, t, 0, 2, 2, n_pol, nt, 1, n_chan)] = 1;
+				data_sim[2 * data_in_idx(p, 2, 2, t, 0, n_pol, n_chan, N_ANT, nt)] = 1;
 			}
 		}
 	}
@@ -421,10 +421,11 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 		// data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)
 		for (int p = 0; p < n_pol; p++) {
 			for (int t = (1024*10); t < (nt-(1024*10)); t++) {
-				//data_sim[2 * data_in_idx(p, t, 0, 0, 2, n_pol, nt, 1, n_chan)] = 1;
-				//data_sim[2 * data_in_idx(p, t, 0, 1, 2, n_pol, nt, 1, n_chan)] = 1;
-				data_sim[2 * data_in_idx(p, t, 0, 2, 2, n_pol, nt, 1, n_chan)] = 1;
-				//data_sim[2 * data_in_idx(p, t, 0, 3, 2, n_pol, nt, 1, n_chan)] = 1;
+				//data_sim[2 * data_in_idx(p, 0, 2, t, 0, n_pol, n_chan, N_ANT, nt)] = 1;
+				//data_sim[2 * data_in_idx(p, 1, 2, t, 0, n_pol, n_chan, N_ANT, nt)] = 1;
+				data_sim[2 * data_in_idx(p, 2, 2, t, 0, n_pol, n_chan, N_ANT, nt)] = 1;
+				//data_sim[2 * data_in_idx(p, 3, 2, t, 0, n_pol, n_chan, N_ANT, nt)] = 1;
+
 			}
 		}
 	}
@@ -440,11 +441,11 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 					if(a < N_REAL_ANT){
 						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
 						// X polarization
-						data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						//data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
+						data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, N_ANT, nt)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						//data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, N_ANT, nt) + 1] = 0;
 						// Y polarization
-						data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						//data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
+						data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, N_ANT, nt)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						//data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, N_ANT, nt) + 1] = 0;
 					}
 				}
 			}
@@ -462,18 +463,14 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 					if(a < N_REAL_ANT){
 						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
 						// X polarization
-						data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						//data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
+						data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, N_ANT, nt)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, N_ANT, nt) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						//data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, N_ANT, nt) + 1] = 0;
 						// Y polarization
-						data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						//data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan) + 1] = 0;
+						data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, N_ANT, nt)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, N_ANT, nt) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						//data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, N_ANT, nt) + 1] = 0;
 
-						// X polarization
-						//data_sim[2 * data_in_idx(0, t, 0, f, a, n_pol, nt, 1, n_chan)] = (cos(2 * PI * freq * t*0.000001));
-						// Y polarization
-						//data_sim[2 * data_in_idx(1, t, 0, f, a, n_pol, nt, 1, n_chan)] = (cos(2 * PI * freq * t*0.000001));
 					}
 				}
 			}
@@ -591,7 +588,7 @@ float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* 
                 // 'schan' is the absolute channel index of the first channel in the RAW file.
                 // The beamformer recipe files contain all of the channels in the band
                 // So 'schan' offsets to start processing with the correct section/range of frequency channels
-		for (int f = subband_idx*n_coarse; f < ((subband_idx*n_coarse) + (n_coarse-1)); f++) {
+		for (int f = subband_idx*n_coarse; f < ((subband_idx*n_coarse) + n_coarse); f++) {
 			for (int b = 0; b < n_beam; b++) {
 				for (int a = 0; a < N_ANT; a++) {
 					if(a < n_real_ant){
@@ -644,7 +641,7 @@ float* data_test(signed char *sim_data){
 }
 
 //Comment out main() function when compiling for hpguppi
-// <----Uncomment here if testing standalone code
+/* // <----Uncomment here if testing standalone code
 // Test all of the kernels and functions, and write the output to
 // a text file for analysis
 int main() {
@@ -725,6 +722,7 @@ int main() {
 	float time_taken = 0;
 	float bf_time = 0;
 	int num_runs = 1;
+        int n_ant = N_REAL_ANT;
 
 	// Start timing FFT computation //
 	struct timespec tval_before, tval_after;
@@ -737,7 +735,7 @@ int main() {
                 // Things to keep in mind about FFT output:
 		// - FFT shift possibly required after FFT if too much memory is allocated
 		// - Output may need to be divided number of FFT points
-                output_data = run_upchannelizer_beamformer(sim_data, sim_coefficients, n_pol, n_beam, n_chan, n_win, n_time_int, n_samp);
+                output_data = run_upchannelizer_beamformer(sim_data, sim_coefficients, n_pol, n_ant, n_beam, n_chan, n_win, n_time_int, n_samp);
 
 		// Stop timing FFT computation //
 		clock_gettime(CLOCK_MONOTONIC, &tval_after);
@@ -788,4 +786,4 @@ int main() {
 
 	return 0;
 }
-// <----Uncomment here if testing standalone code
+*/ // <----Uncomment here if testing standalone code

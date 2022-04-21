@@ -27,9 +27,11 @@
 
 #include "upchannelizer_beamformer.h"
 
-#define data_blk_in_idx(p, t, f, a, Np, Nt, Nf)              ((p) + (Np)*(t) + (Nt)*(Np)*(f) + (Nf)*(Nt)*(Np)*(a))
-#define data_shm_blk_idx(p, t, b, f, a, Np, Nt, Nb, Nf)      ((p) + (Np)*(t) + (Nt)*(Np)*(b) + (Nb)*(Nt)*(Np)*(f) + (Nf)*(Nb)*(Nt)*(Np)*(a))
-#define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
+#define data_blk_in_idx(p, t, c, a, Np, Nt, Nc)              ((p) + (Np)*(t) + (Nt)*(Np)*(c) + (Nc)*(Nt)*(Np)*(a))
+//#define data_shm_blk_idx(p, t, b, f, a, Np, Nt, Nb, Nf)      ((p) + (Np)*(t) + (Nt)*(Np)*(b) + (Nb)*(Nt)*(Np)*(f) + (Nf)*(Nb)*(Nt)*(Np)*(a))
+//#define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
+#define data_shm_blk_idx(p, c, a, t, b, Np, Nc, Na, Nt)      ((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(b))
+#define data_in_idx(p, c, a, t, w, Np, Nc, Na, Nt)           ((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(w))
 #define VERBOSE 0
 #define TIMING 0
 
@@ -304,7 +306,6 @@ static void *run(hashpipe_thread_args_t * args)
     int nants = 0;            // Number of antennas stated in RAW file
     int npol = 0;             // Number of polarizations stated in RAW file
     int obsnchan = 0;         // Number of coarse channels X antennas stated in RAW file
-    int n_blocks = 0;         // Number of blocks in a RAW file
     int n_coarse = 0;         // Number of coarse channels stated in RAW file
     int n_subband = 16;       // Number of sub bands processed serially
     int n_coarse_proc = 0;    // Number of coarse channels processed at one time
@@ -499,35 +500,29 @@ static void *run(hashpipe_thread_args_t * args)
 #if VERBOSE
                         printf("RAW INPUT: char *header = hpguppi_databuf_header(db, block_idx); \n");
 #endif
+                        if(block_count == 0){
+                            header = hpguppi_databuf_header(db, block_idx);
+                            hashpipe_status_lock_safe(&st);
+                            hputs(st.buf, status_key, "receiving");
+                            memcpy(header, &header_buf, headersize);
+                            hashpipe_status_unlock_safe(&st);
 
-                        header = hpguppi_databuf_header(db, block_idx);
-                        hashpipe_status_lock_safe(&st);
-                        hputs(st.buf, status_key, "receiving");
-                        memcpy(header, &header_buf, headersize);
-                        hashpipe_status_unlock_safe(&st);
-
-                        //printf("RAW INPUT: directio = hpguppi_read_directio_mode(header); \n");
-                        directio = hpguppi_read_directio_mode(header);
+                            //printf("RAW INPUT: directio = hpguppi_read_directio_mode(header); \n");
+                            directio = hpguppi_read_directio_mode(header);
 
 #if VERBOSE
-                        printf("RAW INPUT: headersize = %d, directio = %d\n", headersize, directio);
+                            printf("RAW INPUT: headersize = %d, directio = %d\n", headersize, directio);
 #endif
 
-                        // Adjust length for any padding required for DirectIO
-                        if(directio) {
-                            // Round up to next multiple of 512
-                            headersize = (headersize+511) & ~511;
+                            // Adjust length for any padding required for DirectIO
+                            if(directio) {
+                                // Round up to next multiple of 512
+                                headersize = (headersize+511) & ~511;
+                            }
+
+                            // Initialize block in buffer
+                            ptr = hpguppi_databuf_data(db, block_idx);
                         }
-
-                        //Read data--------------------------------------------------
-                        // Start timing read
-#if TIMING
-                        struct timespec tval_before, tval_after;
-                        clock_gettime(CLOCK_MONOTONIC, &tval_before);
-#endif
-
-                        // Initialize block in buffer
-                        ptr = hpguppi_databuf_data(db, block_idx);
                         lseek(fdin, headersize-MAX_HDR_SIZE, SEEK_CUR);
                         blocsize = get_block_size(header_buf, MAX_HDR_SIZE);
                         cur_pktidx = get_cur_pktidx(header_buf, MAX_HDR_SIZE);
@@ -538,7 +533,6 @@ static void *run(hashpipe_thread_args_t * args)
                         nants = get_nants(header_buf, MAX_HDR_SIZE);
                         npol = get_npol(header_buf, MAX_HDR_SIZE);
                         obsnchan = get_obsnchan(header_buf, MAX_HDR_SIZE);
-                        n_blocks = raw_file_size/(headersize + blocsize);
                         n_coarse = (int)obsnchan/nants;
                         n_coarse_proc = n_coarse/n_subband;
                         n_samp_per_block = (int)(blocsize/(2*obsnchan*npol));
@@ -566,6 +560,13 @@ static void *run(hashpipe_thread_args_t * args)
                             prev_pktidx = cur_pktidx;
                         }
 
+                        //Read data--------------------------------------------------
+                        // Start timing read
+#if TIMING
+                        struct timespec tval_before, tval_after;
+                        clock_gettime(CLOCK_MONOTONIC, &tval_before);
+#endif
+
 #if VERBOSE
                         printf("RAW INPUT: Block size: %d, and  BLOCK_DATA_SIZE: %d \n", blocsize, BLOCK_DATA_SIZE);
                         printf("RAW INPUT: header size: %d, and  MAX_HDR_SIZE: %d \n", headersize, MAX_HDR_SIZE);
@@ -577,10 +578,12 @@ static void *run(hashpipe_thread_args_t * args)
                                 // Place input data in shared memory buffer (from RAW file or simulated)
                                 if(sim_flag == 0){
                                     // Read the remaining dimensions in the RAW block (npol and n_samp_per_block) and place in the shared memory buffer block
-                                    read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,0,block_count,c,a,npol,n_samp_per_block,n_blocks,n_coarse_proc)], npol*n_samp_per_block);
+                                    //read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,0,block_count,c,a,npol,n_samp_per_block,n_blocks,n_coarse_proc)], npol*n_samp_per_block);
+                                    read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,c,a,0,block_count,npol,n_coarse_proc,nants,n_samp_per_block)], npol*n_samp_per_block);
                                 } else{
-                                    // Copy simulated data to shared memory buffer block
-                                    memcpy(&ptr[data_in_idx(0,0,0,c,a,n_pol,n_samp,1,n_chan)], &sim_data[data_in_idx(0,0,0,c,a,n_pol,n_samp,1,n_chan)], n_pol*n_samp);
+                                    // Copy simulated data to shared memory buffer block - data_in_idx(p, c, a, t, w, Np, Nc, Na, Nt)
+                                    //memcpy(&ptr[data_in_idx(0,0,0,c,a,n_pol,n_samp,1,n_chan)], &sim_data[data_in_idx(0,0,0,c,a,n_pol,n_samp,1,n_chan)], n_pol*n_samp);
+                                    memcpy(&ptr[data_in_idx(0,c,a,0,0,n_pol,n_chan,N_ANT,1)], &sim_data[data_in_idx(0,c,a,0,0,n_pol,n_chan,N_ANT,1)], n_pol*n_samp);
                                 }
                             }
                         }
@@ -593,29 +596,13 @@ static void *run(hashpipe_thread_args_t * args)
 
                         printf("RAW INPUT: Time taken to read from RAW file = %f ms \n", read_time);
 #endif
-                        // Iterate through blocks in RAW file
+                        // Iterate through blocks in RAW files for a scan corresponding to a subband
                         block_count++;
                     } else if(n_missed_blks > 0){
-                        // Copy the same header info from previous block to zero block in buffer
-                        header = hpguppi_databuf_header(db, block_idx);
-                        hashpipe_status_lock_safe(&st);
-                        hputs(st.buf, status_key, "receiving");
-                        memcpy(header, &header_buf, headersize);
-                        hashpipe_status_unlock_safe(&st);
+                        if(block_count == 0){
+                            headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE);
+                            piperblk = get_piperblk(header_buf, MAX_HDR_SIZE);
 
-                        // Set pktidx in the header of the shared memory buffer block (header_buf)
-                        zero_blk_pktidx -= n_missed_blks*piperblk;
-                        set_pktidx(header_buf, zero_blk_pktidx, MAX_HDR_SIZE);
-
-                        // Copy block of zeros to block in buffer
-                        ptr = hpguppi_databuf_data(db, block_idx);
-                        memcpy(ptr, zero_blk, N_INPUT);
-            
-                        // Decrement n_missed_blks by 1
-                        n_missed_blks -= 1;
-
-                        // If n_missed_blks == 0, then process the data at the packet index after blocks of zeros (cur_pktidx)
-                        if(n_missed_blks == 0){
                             // Copy the same header info from previous block to zero block in buffer
                             header = hpguppi_databuf_header(db, block_idx);
                             hashpipe_status_lock_safe(&st);
@@ -623,8 +610,34 @@ static void *run(hashpipe_thread_args_t * args)
                             memcpy(header, &header_buf, headersize);
                             hashpipe_status_unlock_safe(&st);
 
-                            // Initialize block in buffer
+                            //printf("RAW INPUT: directio = hpguppi_read_directio_mode(header); \n");
+                            directio = hpguppi_read_directio_mode(header);
+
+#if VERBOSE
+                            printf("RAW INPUT: headersize = %d, directio = %d\n", headersize, directio);
+#endif
+
+                            // Adjust length for any padding required for DirectIO
+                            if(directio) {
+                                // Round up to next multiple of 512
+                                headersize = (headersize+511) & ~511;
+                            }
+
                             ptr = hpguppi_databuf_data(db, block_idx);
+                        }
+
+                        // Set pktidx in the header of the shared memory buffer block (header_buf)
+                        zero_blk_pktidx -= n_missed_blks*piperblk;
+                        set_pktidx(header_buf, zero_blk_pktidx, MAX_HDR_SIZE);
+
+                        // Copy block of zeros to block in buffer
+                        memcpy(&ptr[block_count*npol*n_coarse_proc*nants*n_samp_per_block], zero_blk, npol*n_coarse_proc*nants*n_samp_per_block);
+            
+                        // Decrement n_missed_blks by 1
+                        n_missed_blks -= 1;
+
+                        // If n_missed_blks == 0, then process the data at the packet index after blocks of zeros (cur_pktidx)
+                        if(n_missed_blks == 0){
 
                             for(int a = 0; a<nants; a++){
                                 for(int c = 0; c<n_coarse_proc; c++){
@@ -632,7 +645,7 @@ static void *run(hashpipe_thread_args_t * args)
                                     lseek(fdin, data_blk_in_idx(0, 0, (c + n_coarse_proc*s), a, npol, n_samp_per_block, n_coarse_proc), SEEK_CUR);
                                     // Place input data in shared memory buffer from RAW file
                                     // Read the remaining dimensions in the RAW block (npol and n_samp_per_block) and place in the shared memory buffer block
-                                    read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,0,block_count,c,a,npol,n_samp_per_block,n_blocks,n_coarse_proc)], npol*n_samp_per_block);
+                                    read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,c,a,0,block_count,npol,n_coarse_proc,nants,n_samp_per_block)], npol*n_samp_per_block);
                                 }
                             }
                             if(block_count >= 0 && (block_count <= 5)){
@@ -644,6 +657,9 @@ static void *run(hashpipe_thread_args_t * args)
                             // Set previous PKTIDX
                             prev_pktidx = cur_pktidx;
                         }
+
+                        // Increment the block count even with zero blocks
+                        block_count++;
                     }
                 }// Sometimes there might be headers with no data blocks remaining in the RAW file. So copy zero blocks to buffer blocks with the appropriate header
                 else if((cur_pos+blocsize) > raw_file_size){
@@ -670,22 +686,23 @@ static void *run(hashpipe_thread_args_t * args)
 
                             // End of scan so move on to the next subband
                             end_of_scan = 1;
+
+                            // Reset block_count to 0 (the block index of the RAW file)
+                            block_count=0;
+
+                            // Mark block as full
+                            hpguppi_input_databuf_set_filled(db, block_idx);
+
+                            // Setup for next block
+                            block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
                         }
-                        // Reset block_count to 0 (the block index of the RAW file)
-                        block_count=0;
                     }
 
                     // Write blocks of zeros to the shared memory buffer blocks
                     // Copy block of zeros to block in buffer
-                    memcpy(ptr, zero_blk, N_INPUT);
+                    memcpy(&ptr[block_count*npol*n_coarse_proc*nants*n_samp_per_block], zero_blk, npol*n_coarse_proc*nants*n_samp_per_block);
 
-                    // Mark block as full
-                    hpguppi_input_databuf_set_filled(db, block_idx);
-
-                    // Setup for next block
-                    block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
-
-                    // If we haven't reached the last header, then increment block_count (the index of the RAW file block)
+                    // If we haven't reached the last header, then increment block_count (the index of blocks in the RAW files of a subband)
                     if(cur_pos < (raw_file_size-headersize)){
                         block_count++;
                     }
@@ -725,6 +742,16 @@ static void *run(hashpipe_thread_args_t * args)
                             // Copy block of zeros to block in buffer
                             memcpy(ptr, zero_blk, N_INPUT);
                         }
+
+                        // Mark block as full
+                        hpguppi_input_databuf_set_filled(db, block_idx);
+
+                        // Setup for next block
+                        block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
+
+                        // Reset block_count to 0 (the index of blocks in the RAW files of a subband)
+                        block_count=0;
+
                         // Reset previous pktidx to 0 for the next scan
                         prev_pktidx = 0;
 
@@ -741,21 +768,21 @@ static void *run(hashpipe_thread_args_t * args)
                         // Start from the beginning of scan (position 0 of filenum=0), but process next subband
                         lseek(fdin, 0, SEEK_SET); // Probably unnecessary, but doesn't hurt
 
+                        // Mark block as full
+                        hpguppi_input_databuf_set_filled(db, block_idx);
+
+                        // Setup for next block
+                        block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
+
+                        // Reset block_count to 0 (the index of blocks in the RAW files of a subband)
+                        block_count=0;
+
                         // Reset previous pktidx to 0 for the next scan
                         prev_pktidx = 0;
 
                         // End of scan so move on to the next subband
                         end_of_scan = 1;
                     }
-
-                    // Mark block as full
-                    hpguppi_input_databuf_set_filled(db, block_idx);
-
-                    // Setup for next block
-                    block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
-
-                    // Reset block_count to 0 (the block index of the RAW file)
-                    block_count=0;
                 }
 
                 /* Will exit if thread has been cancelled */
