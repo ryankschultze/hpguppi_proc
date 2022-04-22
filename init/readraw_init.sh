@@ -3,11 +3,11 @@
 # readraw_init.sh - Read GUPPI RAW files
 # Usage: readraw_init.sh [mode] [input] [output]
 #
-#     mode   - readonly|cp|fil|cbf
+#     mode   - readonly|cp|fil|cbf|ubf
 #     input  - input dir
 #     output - (optional)
 #
-# If mode is cbf, then no input and output are necessary
+# If mode is cbf or ubf, then no input and output are necessary
 # Input and output will be provided by the status buffer
 
 
@@ -37,7 +37,7 @@ then
         outdir=${basefile}
         shift
     fi
-elif [ "$1" = 'cp' ] || [ "$1" = 'fil' ] || [ "$1" = 'cbf' ]
+elif [ "$1" = 'cp' ] || [ "$1" = 'fil' ] || [ "$1" = 'cbf' ] || [ "$1" = 'ubf' ]
 then
     net_thread=hpguppi_rawfile_input_thread
     if [ "$1" = 'cp' ]
@@ -46,8 +46,11 @@ then
     elif [ "$1" = 'fil' ]
     then
         out_thread=hpguppi_fildisk_meerkat_thread
+    elif [ "$1" = 'cbf' ]
+    then
+        out_thread=hpguppi_coherent_bf_thread
     else
-	out_thread=hpguppi_coherent_bf_thread
+	out_thread=hpguppi_upchan_bf_thread
     fi
 
     if [ "$1" = 'cp' ] || [ "$1" = 'fil' ]
@@ -73,13 +76,13 @@ then
         fi
     fi
 else
-    echo 'Unsupported mode. Choose between "readonly", "cp", "fil", "cbf".'
+    echo 'Unsupported mode. Choose between "readonly", "cp", "fil", "cbf", "ubf".'
     echo Exiting...
     exit
 fi
 
 #-------------------------------------------
-if [ "$1" = 'cbf' ]
+if [ "$1" = 'cbf' ] || [ "$1" = 'ubf' ]
 then
     if [ $# -eq 2 ]
     then
