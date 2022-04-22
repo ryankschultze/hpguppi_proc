@@ -673,7 +673,11 @@ static void *run(hashpipe_thread_args_t * args)
                         printf("RAW INPUT: Opening next raw file '%s'\n", fname);
                         fdin = open(fname, open_flags, 0644);
                         if (fdin==-1) { // End of a sequence of RAW files corresponding to a scan
+                            // Start the next scan with file number 0
                             filenum=0;
+
+                            // Inform downstream thread about the number of time samples in a RAW file
+                            hputi4(st.buf, "NSAMP", block_count*n_samp_per_block);
 
                             // If PKTIDX < PKTSTOP and we're at the end of the scan then set PKTIDX == PKTSTOP 
                             // and copy a dummy block to the buffer
@@ -716,7 +720,11 @@ static void *run(hashpipe_thread_args_t * args)
                     printf("RAW INPUT: Opening next raw file '%s'\n", fname);
                     fdin = open(fname, open_flags, 0644);
                     if ((fdin==-1) && (s == (n_subband-1))) { // End of a sequence of RAW files corresponding to a scan and end of subbands
+                        // Start the next scan with file number 0
                         filenum=0;
+
+                        // Inform downstream thread about the number of time samples in a RAW file
+                        hputi4(st.buf, "NSAMP", block_count*n_samp_per_block);
 
                         // Inform the downstream thread that we have reached the end of a scan
                         if(cur_pktidx < pktstop){
@@ -758,8 +766,11 @@ static void *run(hashpipe_thread_args_t * args)
                         // End of scan so move on to the next subband
                         end_of_scan = 1;
                     }else if ((fdin==-1) && (s < n_subband)) { // End of a sequence of RAW files corresponding to a scan and less than the no. of subbands
-                        // File number is reset to 0
+                        // Start the next scan with file number 0
                         filenum=0;
+
+                        // Inform downstream thread about the number of time samples in a RAW file
+                        hputi4(st.buf, "NSAMP", block_count*n_samp_per_block);
 
                         sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
                         printf("RAW INPUT: Opening first raw file '%s' of scan for subband = %d of %d \n", fname, s, n_subband);

@@ -594,11 +594,27 @@ static void *run(hashpipe_thread_args_t * args)
         printf("CBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
       }
 
-      // Number of time samples per block in a RAW file
-      n_samp = (int)(raw_blocsize*n_raw_blks/(2*obsnchan*npol));
+      // Number of time samples in a RAW file
+      hashpipe_status_lock_safe(st);
+      hgeti4(st->buf, "NSAMP", &n_samp); 
+      hashpipe_status_unlock_safe(st);
+
+      // Number of FFT points depending on mode
+      if(n_coarse_proc == 1){        // 1k mode
+        n_fft = 524288; // 2^19 point FFT
+      }else if(n_coarse_proc == 4){  // 4k mode
+        n_fft = 131072; // 2^17 point FFT
+      }else if(n_coarse_proc == 32){ // 32k mode
+        n_fft = 16384;  // 2^14 point FFT
+      }
+
+      // If for whatever reason, n_samp is less than or equal to n_fft, set n_fft = n_samp
+      if(n_samp <= n_fft){
+        n_fft = n_samp;
+      }
 
       // Number of time samples used for FFT (Number of FFT points)
-      n_fft = n_samp/n_time_int;
+      n_time_int = n_samp/n_fft;
 
       // Number of spectra windows
       n_win = n_time_int;
