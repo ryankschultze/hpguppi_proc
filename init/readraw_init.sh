@@ -39,17 +39,20 @@ then
     fi
 elif [ "$1" = 'cp' ] || [ "$1" = 'fil' ] || [ "$1" = 'cbf' ] || [ "$1" = 'ubf' ]
 then
-    net_thread=hpguppi_rawfile_input_thread
     if [ "$1" = 'cp' ]
     then
+        net_thread=hpguppi_rawfile_input_thread
         out_thread=hpguppi_rawdisk_only_thread
     elif [ "$1" = 'fil' ]
     then
+        net_thread=hpguppi_rawfile_input_thread
         out_thread=hpguppi_fildisk_meerkat_thread
     elif [ "$1" = 'cbf' ]
     then
+        net_thread=hpguppi_rawfile_input_thread
         out_thread=hpguppi_coherent_bf_thread
     else
+        net_thread=hpguppi_stride_input_thread
 	out_thread=hpguppi_upchan_bf_thread
     fi
 

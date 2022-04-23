@@ -18,9 +18,9 @@ bflibdir ?= $(repo_prefix)/lib
 bfincludedir ?= $(repo_prefix)/include
 
 #On blc03 with NVIDIA RTX 2080
-#CUDA_ARCH ?= "-gencode=arch=compute_75,code=sm_75"
+CUDA_ARCH ?= "-gencode=arch=compute_75,code=sm_75"
 #On blc03 with NVIDIA A5000
-CUDA_ARCH ?= "-gencode=arch=compute_80,code=sm_80"
+#CUDA_ARCH ?= "-gencode=arch=compute_80,code=sm_80"
 #On blc02 with NVIDIA Xp
 #CUDA_ARCH ?= "-gencode=arch=compute_53,code=sm_53"
 

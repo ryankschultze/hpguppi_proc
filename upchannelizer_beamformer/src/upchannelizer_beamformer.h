@@ -28,7 +28,8 @@
 #define DELAY_POLYS   (unsigned long int)(2)                                            // Number of coefficients in polynomial
 #define N_DELAYS      (unsigned long int)(DELAY_POLYS*N_ANT*N_BEAM)                     // Size of first order polynomial delay array
 #define N_OUTPUT      (unsigned long int)(2*N_POL*N_BEAM*N_FREQ*N_TIME)                 // Size of beamformer output
-#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_TIME)                         // Size of beamformer output after abs()^2 and short time integration
+#define N_FFT         (16384)                                                           // N-points of FFT in 32k mode
+#define N_BF_POW      (unsigned long int)(N_BEAM*N_FREQ*N_FFT)                          // Size of beamformer output after abs()^2 and short time integration
 // For cuFFT
 #define RANK                (1)
 //#define BATCH(Np,Nw,Nf)     (N_ANT)*(Np)*(Nw)*(Nf)

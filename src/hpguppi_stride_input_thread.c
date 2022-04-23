@@ -1,4 +1,4 @@
-/* hpguppi_rawfile_input_thread.c
+/* hpguppi_stride_input_thread.c
  *
  * Routine to read GUPPI RAW files and put them 
  * into shared memory blocks. 
@@ -32,7 +32,7 @@
 //#define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
 #define data_shm_blk_idx(p, c, a, t, b, Np, Nc, Na, Nt)      ((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(b))
 #define data_in_idx(p, c, a, t, w, Np, Nc, Na, Nt)           ((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(w))
-#define VERBOSE 0
+#define VERBOSE 1
 #define TIMING 0
 
 static int get_header_size(int fdin, char * header_buf, size_t len)
@@ -42,7 +42,7 @@ static int get_header_size(int fdin, char * header_buf, size_t len)
     char header_reset[MAX_HDR_SIZE];
     rv = read(fdin, header_buf, MAX_HDR_SIZE);
     if (rv == -1) {
-        hashpipe_error("hpguppi_rawfile_input_thread", "error reading file");
+        hashpipe_error("hpguppi_stride_input_thread", "error reading file");
     } else if (rv > 0) {
         //Read header loop over the 80-byte records
         for (i=0; i<len; i += 80) {
@@ -195,7 +195,7 @@ static int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t 
     // I don't know what the next block's header size is and I shouldn't make assumptions so read the max header size and offset back based off that
     rv = read(fdin, header_buf, MAX_HDR_SIZE);
     if (rv == -1) {
-        hashpipe_error("hpguppi_rawfile_input_thread", "error reading file");
+        hashpipe_error("hpguppi_stride_input_thread", "error reading file");
     } else if (rv > 0) {
         //Read header loop over the 80-byte records
         for (i=0; i<len; i += 80) {
@@ -377,7 +377,7 @@ static void *run(hashpipe_thread_args_t * args)
          * if necessary and fill its header with new values.
          */
 #if VERBOSE
-	printf("RAW INPUT: while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) \n");
+	printf("STRIDE INPUT: while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) \n");
 #endif
         while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) 
                 != HASHPIPE_OK) {
@@ -394,7 +394,7 @@ static void *run(hashpipe_thread_args_t * args)
         }
 
 #if VERBOSE
-	printf("RAW INPUT: Before file open if{} \n");
+	printf("STRIDE INPUT: Before file open if{} \n");
 #endif
 
         // Stride through RAW file to get all time samples for specific subband in the RAW file and place in buffer accordingly
@@ -432,41 +432,41 @@ static void *run(hashpipe_thread_args_t * args)
                                 strcpy(cur_fname, indir); // Use cur_fname as the current file name variable moving forward
                             }
                         }
-                        //printf("RAW INPUT: Got current RAW file: %s\n", cur_fname);
+                        //printf("STRIDE INPUT: Got current RAW file: %s\n", cur_fname);
                     }
                     // Now create the basefilename
                     // If a '...0000.raw' file exists, that is different from the previous '...0000.raw' file
                     if (strcmp(prev_fname, cur_fname) != 0){
                         strcpy(prev_fname, cur_fname); // Save this file name for comparison on the next iteration
-                        printf("RAW INPUT: Got current RAW file: %s\n", cur_fname);
+                        printf("STRIDE INPUT: Got current RAW file: %s\n", cur_fname);
                         base_pos = strchr(cur_fname, '.'); // Finds the first occurence of a period in the filename
                         period_pos = base_pos-cur_fname;
-                        printf("RAW INPUT: The last position of . is %ld \n", period_pos);
+                        printf("STRIDE INPUT: The last position of . is %ld \n", period_pos);
                         memcpy(basefilename, cur_fname, period_pos); // Copy base filename portion of file name to tmp_basefilename variable
                 
-                        printf("RAW INPUT: Base filename from command: %s \n", basefilename);
+                        printf("STRIDE INPUT: Base filename from command: %s \n", basefilename);
 
                         // Get basefilename with no path and place in status buffer
                         // strrchr() finds the last occurence of the specified character
                         char_offset = strrchr(basefilename, character);
                         slash_pos = char_offset-basefilename;
-                        printf("RAW INPUT: The last position of %c is %ld \n", character, slash_pos);
+                        printf("STRIDE INPUT: The last position of %c is %ld \n", character, slash_pos);
 
                         // Get file name with no path
                         memcpy(new_base, &basefilename[slash_pos+1], sizeof(basefilename)-slash_pos);
-                        printf("RAW INPUT: File name with no path: %s \n", new_base);
+                        printf("STRIDE INPUT: File name with no path: %s \n", new_base);
 
                         hputs(st.buf, "BASEFILE", new_base);
 
                     }
                     else{
                         // The RAW file hasn't changed so wait for new file to show up in the buffer
-                        //printf("RAW INPUT: Waiting for new RAW file name! \n");
+                        //printf("STRIDE INPUT: Waiting for new RAW file name! \n");
                         continue;
                     }
                     sprintf(fname, "%s.%04d.raw", basefilename, filenum);
             
-                    printf("RAW INPUT: Opening first raw file '%s'\n", fname);
+                    printf("STRIDE INPUT: Opening first raw file '%s'\n", fname);
                     fdin = open(fname, open_flags, 0644);
                     if (fdin==-1) {
                         hashpipe_error(__FUNCTION__,"Error opening file.");
@@ -476,14 +476,25 @@ static void *run(hashpipe_thread_args_t * args)
                     // Get raw file size in order to calculate the number of blocks in the file
                     raw_file_size = get_file_size(fdin);
 
+                    printf("STRIDE INPUT: raw_file_size = %ld \n", raw_file_size);
+
                     headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE);
 
+                    printf("STRIDE INPUT: headersize = %d \n", headersize);
+
                     blocsize = get_block_size(header_buf, MAX_HDR_SIZE);
+
+                    printf("STRIDE INPUT: blocsize = %d \n", blocsize);
+
                     lseek(fdin, 0, SEEK_SET);
+
+                    printf("STRIDE INPUT: After setting position back to beginning \n");
                 }
 
                 // Get the current position of the file
                 cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
+
+                printf("STRIDE INPUT: current position = %ld \n", cur_pos);
 
                 // If we are not at the end of the file, read blocks and transfer to shared mem buffer
                 // else if we are at the end, move on to the next file
@@ -493,12 +504,12 @@ static void *run(hashpipe_thread_args_t * args)
                     if(n_missed_blks == 0){
                         //Handling header - size, output path, directio----------------
 #if VERBOSE
-                        printf("RAW INPUT: int headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE); \n");
+                        printf("STRIDE INPUT: int headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE); \n");
 #endif
                         headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE);
                         set_output_path(header_buf, outdir, MAX_HDR_SIZE);
 #if VERBOSE
-                        printf("RAW INPUT: char *header = hpguppi_databuf_header(db, block_idx); \n");
+                        printf("STRIDE INPUT: char *header = hpguppi_databuf_header(db, block_idx); \n");
 #endif
                         if(block_count == 0){
                             header = hpguppi_databuf_header(db, block_idx);
@@ -507,11 +518,11 @@ static void *run(hashpipe_thread_args_t * args)
                             memcpy(header, &header_buf, headersize);
                             hashpipe_status_unlock_safe(&st);
 
-                            //printf("RAW INPUT: directio = hpguppi_read_directio_mode(header); \n");
+                            //printf("STRIDE INPUT: directio = hpguppi_read_directio_mode(header); \n");
                             directio = hpguppi_read_directio_mode(header);
 
 #if VERBOSE
-                            printf("RAW INPUT: headersize = %d, directio = %d\n", headersize, directio);
+                            printf("STRIDE INPUT: headersize = %d, directio = %d\n", headersize, directio);
 #endif
 
                             // Adjust length for any padding required for DirectIO
@@ -525,20 +536,31 @@ static void *run(hashpipe_thread_args_t * args)
                         }
                         lseek(fdin, headersize-MAX_HDR_SIZE, SEEK_CUR);
                         blocsize = get_block_size(header_buf, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: blocsize = %d \n", blocsize);
                         cur_pktidx = get_cur_pktidx(header_buf, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: cur_pktidx = %ld \n", cur_pktidx);
                         pktstart = get_pktstart(header_buf, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: pktstart = %ld \n", pktstart);
                         pktstop = get_pktstop(header_buf, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: pktstop = %ld \n", pktstop);
                         piperblk = get_piperblk(header_buf, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: piperblk = %d \n", piperblk);
                         // Descriptions of the variables below are at the initializations
                         nants = get_nants(header_buf, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: nants = %d \n", nants);
                         npol = get_npol(header_buf, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: npol = %d \n", npol);
                         obsnchan = get_obsnchan(header_buf, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: obsnchan = %d \n", obsnchan);
                         n_coarse = (int)obsnchan/nants;
+                        printf("STRIDE INPUT: n_coarse = %d \n", n_coarse);
                         n_coarse_proc = n_coarse/n_subband;
+                        printf("STRIDE INPUT: n_coarse_proc = %d \n", n_coarse_proc);
                         n_samp_per_block = (int)(blocsize/(2*obsnchan*npol));
+                        printf("STRIDE INPUT: n_samp_per_block = %d \n", n_samp_per_block);
 
-                        printf("RAW INPUT: Current pktidx = %ld, pktstart = %ld, and pktstop = %ld \n", cur_pktidx, pktstart, pktstop);
-                        printf("RAW INPUT: piperblk = %d \n", piperblk);
+                        printf("STRIDE INPUT: Current pktidx = %ld, pktstart = %ld, and pktstop = %ld \n", cur_pktidx, pktstart, pktstop);
+                        printf("STRIDE INPUT: piperblk = %d \n", piperblk);
 
                         // If current packet index is greater than packet start,
                         // check to see whether there are missed blocks
@@ -568,8 +590,8 @@ static void *run(hashpipe_thread_args_t * args)
 #endif
 
 #if VERBOSE
-                        printf("RAW INPUT: Block size: %d, and  BLOCK_DATA_SIZE: %d \n", blocsize, BLOCK_DATA_SIZE);
-                        printf("RAW INPUT: header size: %d, and  MAX_HDR_SIZE: %d \n", headersize, MAX_HDR_SIZE);
+                        printf("STRIDE INPUT: Block size: %d, and  BLOCK_DATA_SIZE: %d \n", blocsize, BLOCK_DATA_SIZE);
+                        printf("STRIDE INPUT: header size: %d, and  MAX_HDR_SIZE: %d \n", headersize, MAX_HDR_SIZE);
 #endif
                         for(int a = 0; a<nants; a++){
                             for(int c = 0; c<n_coarse_proc; c++){
@@ -594,7 +616,7 @@ static void *run(hashpipe_thread_args_t * args)
                         time_taken_r = time_taken_r + (float)(tval_after.tv_nsec - tval_before.tv_nsec)*1e-9; //*1e-6; // Time in nanoseconds since 'tv_sec - start and end'
                         read_time = time_taken_r;
 
-                        printf("RAW INPUT: Time taken to read from RAW file = %f ms \n", read_time);
+                        printf("STRIDE INPUT: Time taken to read from RAW file = %f ms \n", read_time);
 #endif
                         // Iterate through blocks in RAW files for a scan corresponding to a subband
                         block_count++;
@@ -610,11 +632,11 @@ static void *run(hashpipe_thread_args_t * args)
                             memcpy(header, &header_buf, headersize);
                             hashpipe_status_unlock_safe(&st);
 
-                            //printf("RAW INPUT: directio = hpguppi_read_directio_mode(header); \n");
+                            //printf("STRIDE INPUT: directio = hpguppi_read_directio_mode(header); \n");
                             directio = hpguppi_read_directio_mode(header);
 
 #if VERBOSE
-                            printf("RAW INPUT: headersize = %d, directio = %d\n", headersize, directio);
+                            printf("STRIDE INPUT: headersize = %d, directio = %d\n", headersize, directio);
 #endif
 
                             // Adjust length for any padding required for DirectIO
@@ -649,10 +671,10 @@ static void *run(hashpipe_thread_args_t * args)
                                 }
                             }
                             if(block_count >= 0 && (block_count <= 5)){
-                                printf("RAW INPUT: Number of bytes read in read(): %zd \n", read_blocsize);
+                                printf("STRIDE INPUT: Number of bytes read in read(): %zd \n", read_blocsize);
                             }
 #if VERBOSE
-                            printf("RAW INPUT: First element of buffer: %d \n", ptr[0]);
+                            printf("STRIDE INPUT: First element of buffer: %d \n", ptr[0]);
 #endif
                             // Set previous PKTIDX
                             prev_pktidx = cur_pktidx;
@@ -670,8 +692,9 @@ static void *run(hashpipe_thread_args_t * args)
                         filenum++;
             
                         sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
-                        printf("RAW INPUT: Opening next raw file '%s'\n", fname);
+                        printf("STRIDE INPUT: Opening next raw file '%s'\n", fname);
                         fdin = open(fname, open_flags, 0644);
+                        printf("STRIDE INPUT: fdin = %d, n_samp = %d \n", fdin, block_count*n_samp_per_block);
                         if (fdin==-1) { // End of a sequence of RAW files corresponding to a scan
                             // Start the next scan with file number 0
                             filenum=0;
@@ -717,8 +740,9 @@ static void *run(hashpipe_thread_args_t * args)
                     filenum++;
             
                     sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
-                    printf("RAW INPUT: Opening next raw file '%s'\n", fname);
+                    printf("STRIDE INPUT: Opening next raw file '%s'\n", fname);
                     fdin = open(fname, open_flags, 0644);
+                    printf("STRIDE INPUT: fdin = %d, n_samp = %d \n", fdin, block_count*n_samp_per_block);
                     if ((fdin==-1) && (s == (n_subband-1))) { // End of a sequence of RAW files corresponding to a scan and end of subbands
                         // Start the next scan with file number 0
                         filenum=0;
@@ -773,7 +797,7 @@ static void *run(hashpipe_thread_args_t * args)
                         hputi4(st.buf, "NSAMP", block_count*n_samp_per_block);
 
                         sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
-                        printf("RAW INPUT: Opening first raw file '%s' of scan for subband = %d of %d \n", fname, s, n_subband);
+                        printf("STRIDE INPUT: Opening first raw file '%s' of scan for subband = %d of %d \n", fname, s, n_subband);
                         fdin = open(fname, open_flags, 0644);
 
                         // Start from the beginning of scan (position 0 of filenum=0), but process next subband
@@ -804,15 +828,15 @@ static void *run(hashpipe_thread_args_t * args)
 
     // Thread success!
     if (fdin!=-1) {
-	printf("RAW INPUT: Closing file! \n");
+	printf("STRIDE INPUT: Closing file! \n");
         close(fdin);
     }
     return THREAD_OK;
 
 }
 
-static hashpipe_thread_desc_t hpguppi_rawfile_input_thread = {
-    name: "hpguppi_rawfile_input_thread",
+static hashpipe_thread_desc_t hpguppi_stride_input_thread = {
+    name: "hpguppi_stride_input_thread",
     skey: "NETSTAT",
     init: NULL,
     run:  run,
@@ -822,5 +846,5 @@ static hashpipe_thread_desc_t hpguppi_rawfile_input_thread = {
 
 static __attribute__((constructor)) void ctor()
 {
-    register_hashpipe_thread(&hpguppi_rawfile_input_thread);
+    register_hashpipe_thread(&hpguppi_stride_input_thread);
 }
