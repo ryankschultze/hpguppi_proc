@@ -743,7 +743,11 @@ static void *run(hashpipe_thread_args_t * args)
             strcat(fb_basefilename, (char *)src_names_str[b].p);
             printf("UBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
-            sprintf(fname, "%s.SB0%d.B0%d.fil",  fb_basefilename, subband_idx, b);
+            if(subband_idx >= 0 && subband_idx < 10) {
+              sprintf(fname, "%s.SB0%d.B0%d.fil",  fb_basefilename, subband_idx, b);
+            }else{
+              sprintf(fname, "%s.SB%d.B0%d.fil",  fb_basefilename, subband_idx, b);
+            }
           }else if(sim_flag == 1){
             sprintf(fname, "%s.B0.fil",  fb_basefilename);
           }
@@ -755,7 +759,11 @@ static void *run(hashpipe_thread_args_t * args)
           strcat(fb_basefilename, (char *)src_names_str[b].p);
           printf("UBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
-          sprintf(fname, "%s.SB%d.B%d.fil", fb_basefilename, subband_idx, b);
+          if(subband_idx >= 0 && subband_idx < 10) {
+            sprintf(fname, "%s.SB0%d.B%d.fil",  fb_basefilename, subband_idx, b);
+          }else{
+            sprintf(fname, "%s.SB%d.B%d.fil",  fb_basefilename, subband_idx, b);
+          }
         }
         hashpipe_info(thread_name, "Opening fil file '%s'", fname);
 
