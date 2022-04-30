@@ -1,5 +1,5 @@
 # This script reshapes the one dimensional array from the beamformer and plots the response for analysis
-# Works with python 2
+# Works with python 3
 import matplotlib.pyplot as plt
 from array import array
 import numpy as np
@@ -27,9 +27,12 @@ N_fine = (1024*1024)/8 # N_coarse*2^17
 #N_coarse = 32
 #N_fine = (128*1024)/8 # N_coarse*2^14
 
+N_elements = int(N_time*N_coarse*N_fine*N_beam)
+
 #define pow_bf_idx(f, c, s, b, Nf, Nc, Ns)
 # Reshape array to 3D -> Fine channel X Coarse channel X Time samples X Beams
-contents_array = contents_float[0:(N_time*N_coarse*N_fine*N_beam)].reshape(N_beam,N_time,N_coarse*N_fine)
+#contents_array = contents_float[0:(N_time*N_coarse*N_fine*N_beam)].reshape(N_beam,N_time,N_coarse*N_fine)
+contents_array = np.reshape(contents_float[0:N_elements], [N_beam,N_time,int(N_coarse*N_fine)])
 
 beam_idx = 2 # beam index to plot
 time_idx = 0 # time sample index to plot
@@ -39,7 +42,7 @@ if N_time > 1:
     # "interpolation ='none'" removes interpolation which was there by default. 
     # I'm only removing it for the sake of accurate analysis and diagnosis.
     #plt.imshow(contents_array[0:N_time,0:N_fine,beam_idx], extent=[1, N_fine, 1, N_time], aspect='auto', interpolation='bicubic')
-    plt.imshow(contents_array[beam_idx,0:N_time,0:(N_coarse*N_fine)], extent=[1, (N_coarse*N_fine), 1, N_time], aspect='auto', interpolation='none')
+    plt.imshow(contents_array[beam_idx,0:N_time,0:int(N_coarse*N_fine)], extent=[1, int(N_coarse*N_fine), 1, N_time], aspect='auto', interpolation='none')
     plt.title('Waterfall (Frequency vs. time)')
     plt.ylabel('Time samples')
     plt.xlabel('Frequency bins')
@@ -49,7 +52,7 @@ if N_time > 1:
 #print(contents_array[0:N_beam,0,5])
 
 # Plot of power spectrum
-plt.plot(contents_array[beam_idx,time_idx,0:(N_coarse*N_fine)])
+plt.plot(contents_array[beam_idx,time_idx,0:int(N_coarse*N_fine)])
 plt.title('Power spectrum')
 plt.xlabel('Frequency bins')
 plt.ylabel('Power (arb.)')
@@ -57,13 +60,13 @@ plt.show()
 
 fig, axs = plt.subplots(2, 2)
 fig.suptitle('Power spectra of individual beams')
-axs[0, 0].plot(contents_array[0,time_idx,0:(N_coarse*N_fine)])
+axs[0, 0].plot(contents_array[0,time_idx,0:int(N_coarse*N_fine)])
 axs[0, 0].set_title('Beam 1')
-axs[0, 1].plot(contents_array[1,time_idx,0:(N_coarse*N_fine)], 'tab:orange')
+axs[0, 1].plot(contents_array[1,time_idx,0:int(N_coarse*N_fine)], 'tab:orange')
 axs[0, 1].set_title('Beam 2')
-axs[1, 0].plot(contents_array[2,time_idx,0:(N_coarse*N_fine)], 'tab:green')
+axs[1, 0].plot(contents_array[2,time_idx,0:int(N_coarse*N_fine)], 'tab:green')
 axs[1, 0].set_title('Beam 3')
-axs[1, 1].plot(contents_array[3,time_idx,0:(N_coarse*N_fine)], 'tab:red')
+axs[1, 1].plot(contents_array[3,time_idx,0:int(N_coarse*N_fine)], 'tab:red')
 axs[1, 1].set_title('Beam 4')
 
 # set the spacing between subplots

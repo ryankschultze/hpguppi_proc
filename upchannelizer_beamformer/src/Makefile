@@ -31,7 +31,7 @@ CU_LIB = -lcufft -lcudart
 LINKER = -Xlinker -export-dynamic
 
 libupchannelizer_beamformer.so: upchannelizer_beamformer.o
-	$(NVCC) $(CUDA_ARCH) $(CU_LIB) -Xcompiler -fPIC -Xcompiler -D_REENTRANT -O3 upchannelizer_beamformer.o -o libupchannelizer_beamformer.so -L$(CUDA_LIBDIR) $(LINKER) --shared
+	$(NVCC) $(CUDA_ARCH) -Xcompiler -fPIC -Xcompiler -D_REENTRANT -O3 upchannelizer_beamformer.o -o libupchannelizer_beamformer.so -L$(CUDA_LIBDIR) $(CU_LIB) $(LINKER) --shared
 
 upchannelizer_beamformer.o: upchannelizer_beamformer.cu upchannelizer_beamformer.h
 	$(NVCC) $(CUDA_ARCH) $(CU_LIB) -c -o upchannelizer_beamformer.o -Xcompiler -fPIC -Xcompiler -D_REENTRANT -O3 upchannelizer_beamformer.cu

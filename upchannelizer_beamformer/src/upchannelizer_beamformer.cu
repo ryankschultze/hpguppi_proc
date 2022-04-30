@@ -57,7 +57,7 @@ float* h_bf_pow = NULL;
 
 // Allocate memory to all arrays 
 void init_upchan_beamformer() {
-	printf("Here In init_FFT()! \n");
+	printf("Here In init_upchan_beamformer()! \n");
 
 	// Allocate memory for input data float type
 	checkCuda(cudaMalloc((void **)&d_data_char, (N_INPUT) * sizeof(signed char)));
@@ -122,7 +122,7 @@ void upchannelize(complex_t* data_tra, int n_pol, int n_chan, int n_win, int n_s
 
 	// Setup the cuFFT plan
 	if (cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan)) != CUFFT_SUCCESS){
-		fprintf(stderr, "CUFFT error: Plan creation failed");
+		fprintf(stderr, "CUFFT error: Plan creation failed\n");
 		return;	
 	}
 
@@ -131,7 +131,7 @@ void upchannelize(complex_t* data_tra, int n_pol, int n_chan, int n_win, int n_s
 	for(int w = 0; w < n_win; w++){
 		h = data_tr_idx(0, 0, 0, 0, w, n_samp, n_pol, n_chan);
 		if (cufftExecC2C(plan, (cufftComplex*)&data_tra[h], (cufftComplex*)&data_tra[h], CUFFT_FORWARD) != CUFFT_SUCCESS){
-			fprintf(stderr, "CUFFT error: ExecC2C Forward failed");
+			fprintf(stderr, "CUFFT error: ExecC2C Forward failed\n");
 			return;	
 		}
 	}
@@ -641,7 +641,7 @@ float* data_test(signed char *sim_data){
 }
 
 //Comment out main() function when compiling for hpguppi
-/* // <----Uncomment here if testing standalone code
+// <----Uncomment here if testing standalone code
 // Test all of the kernels and functions, and write the output to
 // a text file for analysis
 int main() {
@@ -681,7 +681,7 @@ int main() {
 	printf("After simulate_coefficients() \n");
 
 	// --------------------- Input data test --------------------- //
-	int input_write = 1; // If input_write is set to 1, the simulated data will be written to a binary file for testing/verification
+	int input_write = 0; // If input_write is set to 1, the simulated data will be written to a binary file for testing/verification
 
 	if(input_write == 1){
 		float* input_test = data_test(sim_data);
@@ -691,7 +691,7 @@ int main() {
 
 		printf("Here1!\n");
 
-		strcpy(input_filename, "/datag/users/mruzinda/i/input_h_fft_bf.bin");
+		strcpy(input_filename, "/mydatag/Unknown/GUPPI/input_h_fft_bf.bin");
 
 		printf("Here2!\n");
 
@@ -752,7 +752,9 @@ int main() {
 
 	printf("Here8!\n");
 
-	strcpy(output_filename, "/datag/users/mruzinda/o/output_d_fft_bf.bin");
+	//strcpy(output_filename, "/datag/users/mruzinda/o/output_d_fft_bf.bin");
+	//strcpy(output_filename, "/mydatag/Unknown/GUPPI/output_d_fft_bf.bin");
+	strcpy(output_filename, "/home/mruzinda/tmp_output/output_d_fft_bf.bin");
 
 	printf("Here9!\n");
 
@@ -782,8 +784,8 @@ int main() {
 	//cudaFreeHost(h_coeff);
 	Cleanup_beamformer();
 
-	printf("Here11!\n");
+	printf("Here13!\n");
 
 	return 0;
 }
-*/ // <----Uncomment here if testing standalone code
+// <----Uncomment here if testing standalone code
