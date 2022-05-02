@@ -33,8 +33,7 @@
 // For cuFFT
 #define RANK                (1)
 //#define BATCH(Np,Nw,Nf)     (N_ANT)*(Np)*(Nw)*(Nf)
-//#define BATCH(Np,Nf)        (N_ANT)*(Np)*(Nf)
-#define BATCH(Np)           (N_ANT)*(Np)
+#define BATCH(Np,Nf)        (N_ANT)*(Np)*(Nf)
 #define ISTRIDE             (1)
 #define IDIST(Nt)           (Nt)
 #define OSTRIDE             (1)

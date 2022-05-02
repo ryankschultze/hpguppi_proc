@@ -417,7 +417,7 @@ int main() {
 
 
 	// --------------------- Input data test --------------------- //
-	int input_write = 1; // If input_write is set to 1, the simulated data will be written to a binary file for testing/verification
+	int input_write = 0; // If input_write is set to 1, the simulated data will be written to a binary file for testing/verification
 
 	if(input_write == 1){
 		float* input_test = data_test(sim_data);
@@ -427,7 +427,8 @@ int main() {
 
 		printf("Here1!\n");
 
-		strcpy(input_filename, "/datag/users/mruzinda/i/input_h_cufft.bin");
+		//strcpy(input_filename, "/datag/users/mruzinda/i/input_h_cufft.bin");
+		strcpy(input_filename, "/home/mruzinda/tmp_output/input_h_cufft.bin");
 
 		printf("Here2!\n");
 
@@ -487,7 +488,8 @@ int main() {
 
 	printf("Here8!\n");
 
-	strcpy(output_filename, "/datag/users/mruzinda/o/output_d_cufft.bin");
+	//strcpy(output_filename, "/datag/users/mruzinda/o/output_d_cufft.bin");
+	strcpy(output_filename, "/home/mruzinda/tmp_output/output_d_cufft.bin");
 
 	printf("Here9!\n");
 

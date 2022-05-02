@@ -52,36 +52,8 @@ inline
 cufftResult checkCufft(cufftResult result)
 {
   if (result != CUFFT_SUCCESS) {
-    //fprintf(stderr, "CUDA Runtime Error: %d\n", 
-    //        result);
-    switch(result){
-      case CUFFT_INVALID_PLAN:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_INVALID_PLAN \n");
-
-      case CUFFT_ALLOC_FAILED:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_ALLOC_FAILED \n");
-
-      case CUFFT_INVALID_TYPE:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_INVALID_TYPE \n");
-
-      case CUFFT_INVALID_VALUE:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_INVALID_VALUE \n");
-
-      case CUFFT_INTERNAL_ERROR:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_INTERNAL_ERROR \n");
-
-      case CUFFT_EXEC_FAILED:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_EXEC_FAILED \n");
-
-      case CUFFT_SETUP_FAILED:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_SETUP_FAILED \n");
-
-      case CUFFT_INVALID_SIZE:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_INVALID_SIZE \n");
-
-      case CUFFT_UNALIGNED_DATA:
-        fprintf(stderr, "CUDA Runtime Error: CUFFT_UNALIGNED_DATA \n");
-    }
+    fprintf(stderr, "CUDA Runtime Error: %d\n", 
+            result);
     assert(result == CUFFT_SUCCESS);
   }
   return result;
@@ -164,25 +136,22 @@ void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n
 void upchannelize(complex_t* data_tra, int n_pol, int n_chan, int n_win, int n_samp){
         cufftHandle plan;
 
-	/*
-	// Determine worksize then create/make plane
-	size_t worksize;
-	checkCufft(cufftEstimate1d(n_samp, CUFFT_C2C, BATCH(n_pol), &worksize));
-	checkCufft(cufftCreate(&plan));
-	checkCufft(cufftMakePlan1d(plan, n_samp, CUFFT_C2C, BATCH(n_pol), &worksize));
-	*/
-
 	// Setup the cuFFT plan
-        checkCufft(cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol)));
+	checkCufft(cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan)));
+	//if (cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_pol,n_chan)) != CUFFT_SUCCESS){
+	//	fprintf(stderr, "CUFFT error: Plan creation failed\n");
+	//	return;	
+	//}
 
     	// Execute a complex-to-complex 1D FFT
-	// Reduce the amount of memory utilized by cufft by iterating through coarese channels (c) and time windows (w)
 	int h = 0;
 	for(int w = 0; w < n_win; w++){
-		for(int c = 0; c < n_chan; c++){
-			h = data_tr_idx(0, 0, 0, c, w, n_samp, n_pol, n_chan);
-                	checkCufft(cufftExecC2C(plan, (cufftComplex*)&data_tra[h], (cufftComplex*)&data_tra[h], CUFFT_FORWARD));
-		}
+		h = data_tr_idx(0, 0, 0, 0, w, n_samp, n_pol, n_chan);
+                checkCufft(cufftExecC2C(plan, (cufftComplex*)&data_tra[h], (cufftComplex*)&data_tra[h], CUFFT_FORWARD));
+		//if (cufftExecC2C(plan, (cufftComplex*)&data_tra[h], (cufftComplex*)&data_tra[h], CUFFT_FORWARD) != CUFFT_SUCCESS){
+		//	fprintf(stderr, "CUFFT error: ExecC2C Forward failed\n");
+		//	return;	
+		//}
 	}
 }
 
