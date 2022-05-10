@@ -21,7 +21,7 @@ using namespace std;
 
 // Perform transpose on the data and convert to floats
 __global__
-void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_samp);
+void data_transpose_ubf(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_samp);
 
 // Perform transpose on the output of the FFT
 __global__
@@ -29,16 +29,16 @@ void fft_shift(cuComplex* data_in, cuComplex* data_tra, int offset, int n_pol, i
 
 // Perform beamforming operation
 __global__
-void coherent_beamformer(cuComplex* input_data, float* coeff, float* output_data, int offset, int n_pol, int n_fine, int n_coarse, int n_beam, int n_win);
+void coherent_beamformer_ubf(cuComplex* input_data, float* coeff, float* output_data, int offset, int n_pol, int n_fine, int n_coarse, int n_beam, int n_win);
 
 // Compute power of beamformer output with STI (abs()^2)
 __global__
-void beamformer_power_sti(cuComplex* bf_volt, float* bf_power, int offset, int n_pol, int n_beam, int n_coarse, int n_fine, int n_time_int, int n_sti);
+void beamformer_power_sti_ubf(cuComplex* bf_volt, float* bf_power, int offset, int n_pol, int n_beam, int n_coarse, int n_fine, int n_time_int, int n_sti);
 
 // Convenience function for checking CUDA runtime API results
 // can be wrapped around any runtime API call. No-op in release builds.
 inline
-cudaError_t checkCuda(cudaError_t result)
+cudaError_t checkCuda_ubf(cudaError_t result)
 {
   if (result != cudaSuccess) {
     fprintf(stderr, "CUDA Runtime Error: %s\n", 
@@ -57,30 +57,31 @@ cufftResult checkCufft(cufftResult result)
     switch(result){
       case CUFFT_INVALID_PLAN:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_INVALID_PLAN \n");
-
+	break;
       case CUFFT_ALLOC_FAILED:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_ALLOC_FAILED \n");
-
+	break;
       case CUFFT_INVALID_TYPE:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_INVALID_TYPE \n");
-
+	break;
       case CUFFT_INVALID_VALUE:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_INVALID_VALUE \n");
-
+	break;
       case CUFFT_INTERNAL_ERROR:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_INTERNAL_ERROR \n");
-
+	break;
       case CUFFT_EXEC_FAILED:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_EXEC_FAILED \n");
-
+	break;
       case CUFFT_SETUP_FAILED:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_SETUP_FAILED \n");
-
+	break;
       case CUFFT_INVALID_SIZE:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_INVALID_SIZE \n");
-
+	break;
       case CUFFT_UNALIGNED_DATA:
         fprintf(stderr, "CUDA Runtime Error: CUFFT_UNALIGNED_DATA \n");
+	break;
     }
     assert(result == CUFFT_SUCCESS);
   }
@@ -99,43 +100,43 @@ void init_upchan_beamformer() {
 	printf("Here In init_upchan_beamformer()! \n");
 
 	// Allocate memory for input data float type
-	checkCuda(cudaMalloc((void **)&d_data_char, (N_INPUT) * sizeof(signed char)));
+	checkCuda_ubf(cudaMalloc((void **)&d_data_char, (N_INPUT) * sizeof(signed char)));
 	printf("Here 1st cudaMalloc! \n");
 
 	// Allocate memory for input data cuComplex type
-	checkCuda(cudaMalloc((void **)&d_data_comp, (N_INPUT) * sizeof(cuComplex) / 2));
+	checkCuda_ubf(cudaMalloc((void **)&d_data_comp, (N_INPUT) * sizeof(cuComplex) / 2));
 	printf("Here 2nd cudaMalloc! \n");
 
 	// Allocate memory for data with FFT shift cuComplex type
-	checkCuda(cudaMalloc((void **)&d_data_shift, (N_INPUT) * sizeof(cuComplex) / 2));
+	checkCuda_ubf(cudaMalloc((void **)&d_data_shift, (N_INPUT) * sizeof(cuComplex) / 2));
 	printf("Here 3rd cudaMalloc! \n");
 
 	// Allocate memory for coefficients float type
-	checkCuda(cudaMalloc((void **)&d_coeff, N_COEFF * sizeof(float)));
+	checkCuda_ubf(cudaMalloc((void **)&d_coeff, N_COEFF * sizeof(float)));
 	printf("Here 4th cudaMalloc! \n");
 
 	// Allocate memory for output power of coherent beamformer
-        //checkCuda(cudaMalloc((void **)&d_coh_bf_pow, (N_BF_POW) * sizeof(float)));
+        //checkCuda_ubf(cudaMalloc((void **)&d_coh_bf_pow, (N_BF_POW) * sizeof(float)));
 	//printf("Here 5th cudaMalloc! \n");
 
-	checkCuda(cudaMallocHost((void **)&h_bf_pow, (N_BF_POW) * sizeof(float)));
+	checkCuda_ubf(cudaMallocHost((void **)&h_bf_pow, (N_BF_POW) * sizeof(float)));
 
 	return;
 }
 
 // Set arrays to zero after a block is processed
-void set_to_zero(){
-	checkCuda(cudaMemset(d_data_comp, 0, (N_INPUT) * sizeof(cuComplex)/2));
+void set_to_zero_ubf(){
+	checkCuda_ubf(cudaMemset(d_data_comp, 0, (N_INPUT) * sizeof(cuComplex)/2));
 }
 
 // Set arrays to zero after a block is processed
 void set_second_to_zero(){
-	checkCuda(cudaMemset(d_data_shift, 0, (N_INPUT) * sizeof(cuComplex)/2));
+	checkCuda_ubf(cudaMemset(d_data_shift, 0, (N_INPUT) * sizeof(cuComplex)/2));
 }
 
 // Perform transpose on the data and convert to floats
 __global__
-void data_transpose(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_samp) {
+void data_transpose_ubf(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_samp) {
 	int t = threadIdx.x; // Time sample index
 	int a = blockIdx.x;  // Antenna index
 	int w = blockIdx.y;  // Time window index
@@ -184,6 +185,7 @@ void upchannelize(complex_t* data_tra, int n_pol, int n_chan, int n_win, int n_s
                 	checkCufft(cufftExecC2C(plan, (cufftComplex*)&data_tra[h], (cufftComplex*)&data_tra[h], CUFFT_FORWARD));
 		}
 	}
+	checkCufft(cufftDestroy(plan));
 }
 
 
@@ -226,7 +228,7 @@ void fft_shift(cuComplex* data_in, cuComplex* data_tra, int offset, int n_pol, i
 
 // Perform beamforming operation
 __global__
-void coherent_beamformer(cuComplex* input_data, float* coeff, cuComplex* output_data, int offset, int n_pol, int n_fine, int n_coarse, int n_beam, int n_win) {
+void coherent_beamformer_ubf(cuComplex* input_data, float* coeff, cuComplex* output_data, int offset, int n_pol, int n_fine, int n_coarse, int n_beam, int n_win) {
 	int a = threadIdx.x; // Antenna index
 	int f = blockIdx.x;  // Fine channel index
 	int c = blockIdx.y;  // Coarse channel index
@@ -274,7 +276,7 @@ void coherent_beamformer(cuComplex* input_data, float* coeff, cuComplex* output_
 
 // Compute power of beamformer output (abs()^2)
 __global__
-void beamformer_power_sti(cuComplex* bf_volt, float* bf_power, int offset, int n_pol, int n_beam, int n_coarse, int n_fine, int n_time_int, int n_sti) {
+void beamformer_power_sti_ubf(cuComplex* bf_volt, float* bf_power, int offset, int n_pol, int n_beam, int n_coarse, int n_fine, int n_time_int, int n_sti) {
 	int t = threadIdx.x; // Time sample index
 	int f = blockIdx.x;  // Fine channel index
 	int c = blockIdx.y;  // Coarse channel index
@@ -390,14 +392,14 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	float* data_out = h_bf_pow;
 
 	// Copy beamformer coefficients from host to device
-	checkCuda(cudaMemcpy(d_coefficient, h_coefficient, (N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ) * sizeof(float), cudaMemcpyHostToDevice));
+	checkCuda_ubf(cudaMemcpy(d_coefficient, h_coefficient, (N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ) * sizeof(float), cudaMemcpyHostToDevice));
 
 	//printf("Before cudaMemcpy(HtoD) coefficients! \n");
 	// Copy input data from host to device
-	checkCuda(cudaMemcpy(d_data_in, data_in, 2*N_ANT*n_pol*nt*n_chan*sizeof(signed char), cudaMemcpyHostToDevice));
+	checkCuda_ubf(cudaMemcpy(d_data_in, data_in, 2*N_ANT*n_pol*nt*n_chan*sizeof(signed char), cudaMemcpyHostToDevice));
 
         // Perform transpose on the data and convert to floats  
-        data_transpose<<<dimGrid_transpose, dimBlock_transpose>>>(d_data_in, d_data_tra, 0, n_pol, n_chan, n_ant, n_samp);
+        data_transpose_ubf<<<dimGrid_transpose, dimBlock_transpose>>>(d_data_in, d_data_tra, 0, n_pol, n_chan, n_ant, n_samp);
         err_code = cudaGetLastError();
 	if (err_code != cudaSuccess) {
 		printf("FFT: data_transpose() kernel Failed: %s\n", cudaGetErrorString(err_code));
@@ -410,24 +412,24 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	fft_shift<<<dimGrid_fftshift, dimBlock_fftshift>>>(d_data_tra, d_data_tra2, 0, n_pol, n_chan, n_win, n_samp);
 
 	// Set input of FFT shift to zero so it can be used as the output of the coherent_beamformer
-	set_to_zero();
+	set_to_zero_ubf();
 
 	// Coherent beamformer
-	coherent_beamformer<<<dimGrid_coh_bf, dimBlock_coh_bf>>>(d_data_tra2, d_coefficient, d_data_tra, 0, n_pol, n_samp, n_chan, n_beam, n_win);
+	coherent_beamformer_ubf<<<dimGrid_coh_bf, dimBlock_coh_bf>>>(d_data_tra2, d_coefficient, d_data_tra, 0, n_pol, n_samp, n_chan, n_beam, n_win);
 
 	set_second_to_zero();
 
 	// Short time integration after beamforming
-	beamformer_power_sti<<<dimGrid_bf_pow, dimBlock_bf_pow>>>(d_data_tra, (float*)d_data_tra2, 0, n_pol, n_beam, n_chan, n_samp, n_time_int, n_sti);
+	beamformer_power_sti_ubf<<<dimGrid_bf_pow, dimBlock_bf_pow>>>(d_data_tra, (float*)d_data_tra2, 0, n_pol, n_beam, n_chan, n_samp, n_time_int, n_sti);
 
         // Copy input data from device to host
-        checkCuda(cudaMemcpy(data_out, (float*)d_data_tra2, n_beam*n_sti*n_samp*n_chan*sizeof(float), cudaMemcpyDeviceToHost));
+        checkCuda_ubf(cudaMemcpy(data_out, (float*)d_data_tra2, n_beam*n_sti*n_samp*n_chan*sizeof(float), cudaMemcpyDeviceToHost));
 
         return data_out;
 }
 
 // Generate simulated data
-signed char* simulate_data(int n_pol, int n_chan, int nt) {
+signed char* simulate_data_ubf(int n_pol, int n_chan, int nt) {
 	signed char* data_sim;
 	data_sim = (signed char*)calloc(N_INPUT, sizeof(signed char));
 
@@ -531,7 +533,7 @@ signed char* simulate_data(int n_pol, int n_chan, int nt) {
 }
 
 // Generate simulated weights or coefficients
-float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
+float* simulate_coefficients_ubf(int n_pol, int n_beam, int n_chan) {
 	float* coeff_sim;
 	coeff_sim = (float*)calloc(N_COEFF, sizeof(float));
 
@@ -629,7 +631,7 @@ float* simulate_coefficients(int n_pol, int n_beam, int n_chan) {
 }
 
 // Generate coefficients with delays and phase up solutions from HDF5 file
-float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant) {
+float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant) {
 	float* coefficients;
 	coefficients = (float*)calloc(N_COEFF, sizeof(float));
 	double tau = 0;
@@ -639,12 +641,13 @@ float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* 
                 // 'schan' is the absolute channel index of the first channel in the RAW file.
                 // The beamformer recipe files contain all of the channels in the band
                 // So 'schan' offsets to start processing with the correct section/range of frequency channels
-		for (int f = subband_idx*n_coarse; f < ((subband_idx*n_coarse) + n_coarse); f++) {
+		//for (int f = subband_idx*n_coarse; f < ((subband_idx*n_coarse) + n_coarse); f++) {
+		for (int f = 0; f < n_coarse; f++) {
 			for (int b = 0; b < n_beam; b++) {
 				for (int a = 0; a < N_ANT; a++) {
 					if(a < n_real_ant){
 						tau = delay[delay_idx(a, b, n, n_real_ant, n_beam)];
-                                                fc = f+schan; // First frequency channel in the RAW file and on this node
+                                                fc = (f + (subband_idx*n_coarse))+schan; // First frequency channel in the RAW file and on this node
 
 						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam)] = (float)(phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].re*cos(2 * PI * coarse_chan[f] * tau) - phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].im*sin(2 * PI * coarse_chan[f] * tau));
 						coefficients[2 * coeff_idx(a, p, b, f, n_pol, n_beam) + 1] = (float)(phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].re*sin(2 * PI * coarse_chan[f] * tau) + phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].im*cos(2 * PI * coarse_chan[f] * tau));
@@ -692,7 +695,7 @@ float* data_test(signed char *sim_data){
 }
 
 //Comment out main() function when compiling for hpguppi
-// <----Uncomment here if testing standalone code
+/*// <----Uncomment here if testing standalone code
 // Test all of the kernels and functions, and write the output to
 // a text file for analysis
 int main() {
@@ -722,12 +725,12 @@ int main() {
         printf("After init_upchan_beamformer() \n");
 
 	// Generate simulated data
-	signed char* sim_data = simulate_data(n_pol, n_chan, nt);
+	signed char* sim_data = simulate_data_ubf(n_pol, n_chan, nt);
 
         printf("After simulate_data() \n");
 
 	// Generate simulated weights or coefficients
-	float* sim_coefficients = simulate_coefficients(n_pol, n_beam, n_chan);
+	float* sim_coefficients = simulate_coefficients_ubf(n_pol, n_beam, n_chan);
 
 	printf("After simulate_coefficients() \n");
 
@@ -772,7 +775,7 @@ int main() {
 
 	float time_taken = 0;
 	float bf_time = 0;
-	int num_runs = 1;
+	int num_runs = 100;
         int n_ant = N_REAL_ANT;
 
 	// Start timing FFT computation //
@@ -839,4 +842,4 @@ int main() {
 
 	return 0;
 }
-// <----Uncomment here if testing standalone code
+*/// <----Uncomment here if testing standalone code

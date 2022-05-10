@@ -15,7 +15,7 @@
 #include <cuda_runtime_api.h>
 #include <cufft.h>
 #include <device_launch_parameters.h>
-#include "upchannelizer_beamformer.h"
+#include "upchannelizer_beamformer_sm_86.h"
 
 using namespace std;
 

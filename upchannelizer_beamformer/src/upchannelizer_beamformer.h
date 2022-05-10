@@ -80,10 +80,10 @@ typedef struct complex_t{
 extern "C" {
 #endif
 void init_upchan_beamformer(); // Allocate memory to all arrays 
-void set_to_zero(); // Set arrays to zero after a block is processed
-signed char* simulate_data(int n_pol, int n_chan, int nt);
-float* simulate_coefficients(int n_pol, int n_beam, int n_chan);
-float* generate_coefficients(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant);
+void set_to_zero_ubf(); // Set arrays to zero after a block is processed
+signed char* simulate_data_ubf(int n_pol, int n_chan, int nt);
+float* simulate_coefficients_ubf(int n_pol, int n_beam, int n_chan);
+float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant);
 //void input_data_pin(signed char * data_in_pin);
 //void output_data_pin(float * data_out_pin);
 //void coeff_pin(float * data_coeff_pin);
