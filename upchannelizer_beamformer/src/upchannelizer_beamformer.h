@@ -34,7 +34,7 @@
 #define RANK                (1)
 //#define BATCH(Np,Nw,Nf)     (N_ANT)*(Np)*(Nw)*(Nf)
 //#define BATCH(Np,Nf)        (N_ANT)*(Np)*(Nf)
-#define BATCH(Np)           (N_ANT)*(Np)
+#define BATCH(Na,Np)        (Na)*(Np)
 #define ISTRIDE             (1)
 #define IDIST(Nt)           (Nt)
 #define OSTRIDE             (1)
@@ -59,11 +59,11 @@
 
 //#define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
 #define data_in_idx(p, c, a, t, w, Np, Nc, Na, Nt)           ((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(w))
-#define data_tr_idx(t, a, p, c, w, Nt, Np, Nc)               ((t) + (Nt)*(a) + (N_ANT)*(Nt)*(p) + (Np)*(N_ANT)*(Nt)*(c) + (Nc)*(Np)*(N_ANT)*(Nt)*(w))
-#define data_fft_out_idx(f, a, p, c, w, Nf, Np, Nc)          ((f) + (Nf)*(a) + (N_ANT)*(Nf)*(p) + (Np)*(N_ANT)*(Nf)*(c) + (Nc)*(Np)*(N_ANT)*(Nf)*(w))
+#define data_tr_idx(t, a, p, c, w, Nt, Na, Np, Nc)           ((t) + (Nt)*(a) + (Na)*(Nt)*(p) + (Np)*(Na)*(Nt)*(c) + (Nc)*(Np)*(Na)*(Nt)*(w))
+#define data_fft_out_idx(f, a, p, c, w, Nf, Na, Np, Nc)      ((f) + (Nf)*(a) + (Na)*(Nf)*(p) + (Np)*(Na)*(Nf)*(c) + (Nc)*(Np)*(Na)*(Nf)*(w))
 // The "Nf" below is equal in value to "Nt*Nc" that is the dimension of "t" since this is the number of FFT points muliplied by the number of coarse channels
-#define data_fftshift_idx(a, p, f, c, w, Np, Nf, Nc)         ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(f) + (Nf)*(Np)*(N_ANT)*(c) + (Nc)*(Nf)*(Np)*(N_ANT)*(w))
-#define coeff_idx(a, p, b, f, Np, Nb)                        ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(b) + (Nb)*(Np)*(N_ANT)*(f))
+#define data_fftshift_idx(a, p, f, c, w, Na, Np, Nf, Nc)     ((a) + (Na)*(p) + (Np)*(Na)*(f) + (Nf)*(Np)*(Na)*(c) + (Nc)*(Nf)*(Np)*(Na)*(w))
+#define coeff_idx(a, p, b, f, Na, Np, Nb)                    ((a) + (Na)*(p) + (Np)*(Na)*(b) + (Nb)*(Np)*(Na)*(f))
 //#define phase_idx(a, p, f, Np)                               ((a) + (N_ANT)*(p) + (Np)*(N_ANT)*(f))
 //#define delay_idx(d, a, b, Na)                               ((d) + DELAY_POLYS*(a) + DELAY_POLYS*(Na)*(b)) // Should be correct indexing
 #define cal_all_idx(a, p, f, Na, Np)                         ((a) + (Na)*(p) + (Np)*(Na)*(f))
@@ -83,13 +83,13 @@ void init_upchan_beamformer(); // Allocate memory to all arrays
 void set_to_zero_ubf(); // Set arrays to zero after a block is processed
 signed char* simulate_data_ubf(int n_pol, int n_chan, int nt);
 float* simulate_coefficients_ubf(int n_pol, int n_beam, int n_chan);
-float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant);
+float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_ant_config, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant);
 //void input_data_pin(signed char * data_in_pin);
 //void output_data_pin(float * data_out_pin);
 //void coeff_pin(float * data_coeff_pin);
 //void unregister_data(void * data_unregister);
 void Cleanup_beamformer();
-void upchannelize(complex_t* data_tra, int n_pol, int n_chan, int n_samp); // Upchannelization
+void upchannelize(complex_t* data_tra, int n_ant_config, int n_pol, int n_chan, int n_samp); // Upchannelization
 float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_ant, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp); // Run upchannelizer and beamformer
 #ifdef __cplusplus
 }

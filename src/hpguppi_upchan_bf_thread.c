@@ -179,7 +179,9 @@ static void *run(hashpipe_thread_args_t * args)
   uint64_t raw_blocsize = 0; // Raw file block size
   int n_fft = 0; // Number of time samples used for FFT (Number of FFT points)
   int n_samp = 0; // Number of time samples per block in a shared memory buffer block
+  int n_samp_spec = 0; // Specification of the number of time samples
   int n_win = 0; // Number of spectra windows in output
+  int n_win_spec = 8; // Specification of the number of spectra windows in output
   int n_time_int = N_TIME_STI; // Number of time samples to integrate
   int n_sti = 0; // Number of STI windows in output
   int subband_idx = 0; // Index of subband that ranges from 0 to 15
@@ -291,47 +293,6 @@ static void *run(hashpipe_thread_args_t * args)
     hashpipe_status_lock_safe(st);
     hgeti4(st->buf, "SUBBAND", &subband_idx); // Get current index of subband being processed
     hashpipe_status_unlock_safe(st);
-    
-    if((pktidx >= pktstop) && (subband_idx == (n_subband-1))){
-      coeff_flag = 0;
-      // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
-      if(cal_all_data != NULL){
-        free(cal_all_data);
-        cal_all_data = NULL;
-        free(delays_data);
-        delays_data = NULL;
-        free(time_array_data);
-        time_array_data = NULL;
-        free(ra_data);
-        ra_data = NULL;
-        free(dec_data);
-        dec_data = NULL;
-        status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
-      }
-      for(int b = 0; b < nbeams; b++){
-        // If file open, close it
-        if(fdraw[b] != -1) {
-          // Close file
-          close(fdraw[b]);
-          // Reset fdraw, got_packet_0, filenum, block_count
-          fdraw[b] = -1;
-        }
-      }
-      got_packet_0 = 0;
-      //filenum = 0;
-      block_count=0;
-      // Print end of recording conditions only once
-      if(rec_stop == 0){
-        rec_stop = 1;
-        hashpipe_info(thread_name, "reached end of scan: "
-        "pktstart %ld pktstop %ld pktidx %ld",
-        pktstart, pktstop, pktidx);
-      }
-      continue;
-    }
-      
-    rec_stop = 0;
-    //if(wait_count > 0)wait_count = 0;
 
     /* Read param struct for this block */
     ptr = hpguppi_databuf_header(db, curblock);
@@ -346,6 +307,72 @@ static void *run(hashpipe_thread_args_t * args)
     hgeti8(ptr, "PKTIDX", &pktidx);
     hgeti8(ptr, "PKTSTART", &pktstart);
     hgeti8(ptr, "PKTSTOP", &pktstop);
+
+    printf("UBF: Before pktidx >= pktstop, pktidx = %ld and pktstop = %ld \n", pktidx, pktstop);    
+    if((pktidx >= pktstop) && (subband_idx == (n_subband-1) || subband_idx == 0)){
+      coeff_flag = 0;
+      printf("UBF: Before freeing memory pktidx = %ld and pktstop = %ld \n", pktidx, pktstop);
+      // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
+      if(cal_all_data != NULL){
+        free(cal_all_data);
+        printf("UBF: free(cal_all_data); \n");
+        cal_all_data = NULL;
+        free(delays_data);
+        printf("UBF: free(delays_data); \n");
+        delays_data = NULL;
+        free(time_array_data);
+        printf("UBF: free(time_array_data); \n");
+        time_array_data = NULL;
+        free(ra_data);
+        printf("UBF: free(ra_data); \n");
+        ra_data = NULL;
+        free(dec_data);
+        printf("UBF: free(dec_data); \n");
+        dec_data = NULL;
+        status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
+        printf("UBF: status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str); \n");
+        /* Mark as free */
+        hpguppi_input_databuf_set_free(db, curblock);
+        printf("UBF: Set block free! \n");
+        /* Go to next block */
+        curblock = (curblock + 1) % db->header.n_block;
+        printf("UBF: Advance to next block! \n");
+      }
+      printf("UBF: Before closing files \n");
+      for(int b = 0; b < nbeams; b++){
+        // If file open, close it
+        if(fdraw[b] != -1) {
+          // Close file
+          close(fdraw[b]);
+          // Reset fdraw, got_packet_0, filenum, block_count
+          fdraw[b] = -1;
+        }
+      }
+      printf("UBF: After closing files \n");
+      got_packet_0 = 0;
+      //filenum = 0;
+      block_count=0;
+      // Print end of recording conditions only once
+      if(rec_stop == 0){
+        rec_stop = 1;
+        hashpipe_info(thread_name, "reached end of scan: "
+        "pktstart %ld pktstop %ld pktidx %ld",
+        pktstart, pktstop, pktidx);
+        // Inform status buffer of processing status
+        hashpipe_status_lock_safe(st);
+        hgets(st->buf, "PROCSTAT", "END"); // Inform status buffer that the scan processing has ended
+        hashpipe_status_unlock_safe(st);
+      }
+      continue;
+    }
+      
+    rec_stop = 0;
+    //if(wait_count > 0)wait_count = 0;
+
+    // Inform status buffer of processing status
+    hashpipe_status_lock_safe(st);
+    hgets(st->buf, "PROCSTAT", "START"); // Inform status buffer that the scan processing has started
+    hashpipe_status_unlock_safe(st);
 
     /* Get values for calculations at varying points in processing */
     hgetu8(ptr, "SYNCTIME", &synctime);
@@ -589,7 +616,7 @@ static void *run(hashpipe_thread_args_t * args)
         }else if(n_coarse_proc == 32){ // 32k mode
           n_fft = 16384;  // 2^14 point FFT
         }
-
+        n_samp_spec = n_fft*n_win_spec;
         //printf("UBF: After getting n_fft = %d and n_coarse_proc = %d \n", n_fft, n_coarse_proc);
       }
 
@@ -615,14 +642,17 @@ static void *run(hashpipe_thread_args_t * args)
     hgeti4(st->buf, "NSAMP", &n_samp); 
     hashpipe_status_unlock_safe(st);
 
-    //printf("UBF: After getting n_samp = %d \n", n_samp);
-
-    // If for whatever reason, n_samp is less than or equal to n_fft, set n_fft = n_samp
-    if(n_samp <= n_fft){
-      n_fft = n_samp;
+    // Zero padded if the number of time samples is less than the specification
+    // If the number of time samples is greater by 2, then the number of antennas is smaller by half (subarray configuration)
+    // So there is a situation where one of the RAW files may have less time samples than 2 times the 
+    // specified value here in the subarray configuration. Try to compensate for that with the else if()
+    if(n_samp < n_samp_spec){
+      n_samp = n_samp_spec;
+    }else if(n_samp > (3*n_samp_spec/2) && n_samp < 2*n_samp_spec){
+      n_samp = 2*n_samp_spec;
     }
 
-    //printf("UBF: After verifying n_samp <= n_fft, n_fft = %d and n_coarse_proc = %d \n", n_fft, n_coarse_proc);
+    //printf("UBF: After getting n_samp = %d \n", n_samp);
 
     // Number of time samples used for FFT (Number of FFT points)
     n_time_int = n_samp/n_fft;
