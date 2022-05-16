@@ -6,8 +6,6 @@
 #define MAX_THREADS (1024)  // Maximum number of threads in a block
 #define N_POL (2) //2                     // Number of polarizations
 #define N_TIME (131072) // (1024) // 8192 //16384 //1 // 8                   // Number of time samples
-#define N_TIME_STI (8)
-#define N_STI (N_TIME/N_TIME_STI)
 #define N_STI_BLOC (32)
 #define N_STREAMS (1)                     // Number of CUDA streams
 //#define N_COARSE_FREQ 64 //32               // Number of coarse channels processed at a time
@@ -18,12 +16,10 @@
 //#define N_FREQ_STREAM (N_FREQ/N_STREAMS) // (N_COARSE_FREQ*N_FINE_FREQ)/N_STREAMS // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
 //#define N_FREQ_STREAM (N_COARSE_FREQ/N_STREAMS) // (N_COARSE_FREQ*N_FINE_FREQ)/N_STREAMS // Number of frequency bins after second FFT.  Should actually be 2^14, but due to limited memory on my laptop, arbitrarily 10
 #define N_ANT (64) // 64                  // Number of possible antennas (64 is also computationally efficient since it is a multiple of 32 which is the size of a warp)
-#define N_REAL_ANT (58)                   // Number of antennas transmitting data downstream
 #define N_BEAM (64) // 64                 // Number of beams
 
 // "2" for inphase and quadrature
 #define N_INPUT       (unsigned long int)(2*N_POL*N_TIME*N_FREQ*N_ANT)                  // Size of input. Currently, same size as output
-#define N_REAL_INPUT  (unsigned long int)(2*N_POL*N_TIME*N_FREQ*N_REAL_ANT)             // Size of input. Currently, same size as output
 #define N_COEFF       (unsigned long int)(2*N_POL*N_ANT*N_BEAM*N_FREQ)                  // Size of beamformer coefficients
 #define DELAY_POLYS   (unsigned long int)(2)                                            // Number of coefficients in polynomial
 #define N_DELAYS      (unsigned long int)(DELAY_POLYS*N_ANT*N_BEAM)                     // Size of first order polynomial delay array
@@ -81,9 +77,9 @@ extern "C" {
 #endif
 void init_upchan_beamformer(); // Allocate memory to all arrays 
 void set_to_zero_ubf(); // Set arrays to zero after a block is processed
-signed char* simulate_data_ubf(int n_pol, int n_chan, int nt);
-float* simulate_coefficients_ubf(int n_pol, int n_beam, int n_chan);
-float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_ant_config, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant);
+signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, int nt);
+float* simulate_coefficients_ubf(int n_sim_ant, int nants, int n_pol, int n_beam, int n_chan);
+float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_ant_config, int n_pol, int n_beam, int actual_n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant);
 //void input_data_pin(signed char * data_in_pin);
 //void output_data_pin(float * data_out_pin);
 //void coeff_pin(float * data_coeff_pin);

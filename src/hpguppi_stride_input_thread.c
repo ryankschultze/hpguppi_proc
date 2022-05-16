@@ -363,18 +363,41 @@ static void *run(hashpipe_thread_args_t * args)
     int directio = 0;
     int sim_flag = 0; // Set to 1 if you'd like to use simulated data rather than the payload from the RAW file
     char * sim_data; // Initialize simulated data array
-    // 5 seconds worth of processing at a time
-    // 1k mode
-    //int n_chan = 1; 
-    //int n_samp = 4096*1024; // 4194304; // 2^22
-    // 4k mode
-    int n_chan = 4; // 64
-    int n_samp = 1024*1024; // 1048576; // 2^20
-    // 32k mode
-    //int n_chan = 32;
-    //int n_samp = 128*1024; // 131072; // 2^17
-    int n_pol = 2; 
-    sim_data = (char *)simulate_data_ubf(n_pol, n_chan, n_samp); // Generate block of simulated data
+    int n_ant_config = 0;
+    int n_chan = 0;
+    int n_samp = 0;
+    int n_pol = 0;
+    int n_sim_ant = 0;
+    if(sim_flag == 1){
+      n_sim_ant = 58;
+      if(n_sim_ant <= N_ANT/2){
+        n_ant_config = N_ANT/2;
+        // 5 seconds worth of processing at a time
+        // 1k mode
+        //n_chan = 1; 
+        //n_samp = 2*4096*1024; // 4194304; // 2^22
+        // 4k mode
+        n_chan = 4; // 64
+        n_samp = 2*1024*1024; // 1048576; // 2^20
+        // 32k mode
+        //n_chan = 32;
+        //n_samp = 2*128*1024; // 131072; // 2^17
+      }else{
+        n_ant_config = N_ANT;
+        // 5 seconds worth of processing at a time
+        // 1k mode
+        //n_chan = 1; 
+        //n_samp = 4096*1024; // 4194304; // 2^22
+        // 4k mode
+        n_chan = 4; // 64
+        n_samp = 1024*1024; // 1048576; // 2^20
+        // 32k mode
+        //n_chan = 32;
+        //n_samp = 128*1024; // 131072; // 2^17
+      }
+      n_pol = 2; 
+      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp); // Generate block of simulated data
+    }
     ssize_t read_blocsize;
 #if TIMING
     float read_time = 0;

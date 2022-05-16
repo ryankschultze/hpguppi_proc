@@ -182,7 +182,7 @@ static void *run(hashpipe_thread_args_t * args)
   int n_samp_spec = 0; // Specification of the number of time samples
   int n_win = 0; // Number of spectra windows in output
   int n_win_spec = 8; // Specification of the number of spectra windows in output
-  int n_time_int = N_TIME_STI; // Number of time samples to integrate
+  int n_time_int = 8; // Number of time samples to integrate
   int n_sti = 0; // Number of STI windows in output
   int subband_idx = 0; // Index of subband that ranges from 0 to 15
   int prev_subband_idx = -1; // Previous subband index
@@ -209,6 +209,7 @@ static void *run(hashpipe_thread_args_t * args)
   double *ra_data;
   double *dec_data;
   uint64_t nbeams;
+  int actual_nbeams = 0;
   uint64_t npol;
   hvl_t *src_names_str;
   int hdf5_obsidsize;
@@ -235,10 +236,17 @@ static void *run(hashpipe_thread_args_t * args)
   int n_subband = 16; // Number of subbands
   double center_freq = 0; // Center frequency of the subband and currently the filterbank file
   int n_samp_per_rawblk = 0; // Number of time samples in a RAW block used to calculate pktidx_time which is the approximate unix time at a given PKTIDX
+  int n_ant_config = 0;
 
   int sim_flag = 0; // Flag to use simulated coefficients (set to 1) or calculated beamformer coefficients (set to 0)
   // Add if statement for generate_coefficients() function option which has 3 arguments - tau, coarse frequency channel, and epoch
   if(sim_flag == 1){
+    int n_sim_ant = 58;
+    if(n_sim_ant <= N_ANT/2){
+      n_ant_config = N_ANT/2;
+    }else{
+      n_ant_config = N_ANT;
+    }
     // Generate weights or coefficients (using simulate_coefficients() for now)
     // Used with simulated data when no RAW file is read
     //int n_chan = 16;  // 1k mode
@@ -246,7 +254,7 @@ static void *run(hashpipe_thread_args_t * args)
     //int n_chan = 512; // 32k mode
     int n_pol = 2;
     int n_beam = 1;
-    tmp_coefficients = simulate_coefficients_ubf(n_pol, n_beam, n_chan);
+    tmp_coefficients = simulate_coefficients_ubf(n_sim_ant, n_ant_config, n_pol, n_beam, n_chan);
     // Register the array in pinned memory to speed HtoD mem copy
     //coeff_pin(tmp_coefficients);
   }
@@ -360,7 +368,7 @@ static void *run(hashpipe_thread_args_t * args)
         pktstart, pktstop, pktidx);
         // Inform status buffer of processing status
         hashpipe_status_lock_safe(st);
-        hgets(st->buf, "PROCSTAT", "END"); // Inform status buffer that the scan processing has ended
+        hgets(st->buf, "PROCSTAT", sizeof("END"), "END"); // Inform status buffer that the scan processing has ended
         hashpipe_status_unlock_safe(st);
       }
       continue;
@@ -371,7 +379,7 @@ static void *run(hashpipe_thread_args_t * args)
 
     // Inform status buffer of processing status
     hashpipe_status_lock_safe(st);
-    hgets(st->buf, "PROCSTAT", "START"); // Inform status buffer that the scan processing has started
+    hgets(st->buf, "PROCSTAT", sizeof("START"), "START"); // Inform status buffer that the scan processing has started
     hashpipe_status_unlock_safe(st);
 
     /* Get values for calculations at varying points in processing */
@@ -397,7 +405,13 @@ static void *run(hashpipe_thread_args_t * args)
     hgets(st->buf, "BASEFILE", sizeof(raw_basefilename), raw_basefilename);
     hgets(st->buf, "OUTDIR", sizeof(outdir), outdir);
     hashpipe_status_unlock_safe(st);
-      
+
+    if(nants <= N_ANT/2){
+      n_ant_config = N_ANT/2;
+    }else{
+      n_ant_config = N_ANT;
+    }
+
     printf("UBF: pktidx = %ld, pktstart = %ld, and pktstop = %ld\n", pktidx, pktstart, pktstop);
     printf("UBF: schan = %d \n", (int)schan);
 
@@ -579,11 +593,18 @@ static void *run(hashpipe_thread_args_t * args)
         status = H5Fclose(file_id);
         printf("status of file close: %d\n", status);
 
+        // The actual number of beams set to compensate for the beams being more than 64 in the BFR5 file
+        actual_nbeams = (int)nbeams;
+        // Set the number of beams to 64 (number set in upchannelizer_beamformer.h) if they are greater than 64 in the BFR5 file
+        if(nbeams > N_BEAM){
+          nbeams = N_BEAM;
+        } 
+
         // Reset indexing of time array since new HDF5 file is in use
         time_array_idx = 0;
 
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
-        tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, (int)schan, n_coarse_proc, subband_idx, nants);
+        tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, n_ant_config, (int)npol, (int)nbeams, actual_nbeams,(int)schan, n_coarse_proc, subband_idx, nants);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
 
         // Get basefilename with no source name
@@ -720,7 +741,7 @@ static void *run(hashpipe_thread_args_t * args)
 
         // Update coefficients with new delay
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
-        tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, (int)npol, (int)nbeams, (int)schan, n_coarse_proc, subband_idx, nants);
+        tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, n_ant_config, (int)npol, (int)nbeams, actual_nbeams, (int)schan, n_coarse_proc, subband_idx, nants);
 
         printf("UBF: After generate_coefficients_ubf \n");
 

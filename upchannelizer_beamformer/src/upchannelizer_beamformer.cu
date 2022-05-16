@@ -436,9 +436,9 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 		printf("FFT: coherent_beamformer_ubf() kernel Failed: %s\n", cudaGetErrorString(err_code));
 	}
 
+	// Set input of coherent_beamformer_ubf() to zero so it can be used as the output of the beamformer_power_sti_ubf() kernel
 	set_second_to_zero();
 
-	printf("Before beamformer_power_sti_ubf() n_beam = %d, n_sti = %d, n_samp = %d, n_chan = %d,  n_time_int = %d, n_pol = %d, n_win = %d \n",n_beam,n_sti,n_samp,n_chan, n_time_int, n_pol, n_win);
 	// Short time integration after beamforming
 	beamformer_power_sti_ubf<<<dimGrid_bf_pow, dimBlock_bf_pow>>>(d_data_tra, (float*)d_data_tra2, 0, n_pol, n_beam, n_chan, n_samp, n_time_int, n_sti);
 	err_code = cudaGetLastError();
@@ -446,19 +446,17 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 		printf("FFT: beamformer_power_sti() kernel Failed: %s\n", cudaGetErrorString(err_code));
 	}
 
-        printf("Before last cudamemcpy() n_beam = %d, n_sti = %d, n_samp = %d, n_chan = %d \n",n_beam,n_sti,n_samp,n_chan);
 	// Copy input data from device to host
 	checkCuda_ubf(cudaMemcpy(data_out, (float*)d_data_tra2, n_beam*n_sti*n_samp*n_chan*sizeof(float), cudaMemcpyDeviceToHost));
-	printf("After last cudamemcpy() \n");
 
         return data_out;
 }
 
 // Generate simulated data
-signed char* simulate_data_ubf(int n_pol, int n_chan, int nt) {
+signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, int nt) {
 	signed char* data_sim;
 	data_sim = (signed char*)calloc(N_INPUT, sizeof(signed char));
-	int nants = N_ANT/2;
+
 	/*
 	'sim_flag' is a flag that indicates the kind of data that is simulated.
 	sim_flag = 0 -> Ones
@@ -471,7 +469,7 @@ signed char* simulate_data_ubf(int n_pol, int n_chan, int nt) {
 	int sim_flag = 5;
 	if (sim_flag == 0) {
 		for (int i = 0; i < (N_INPUT / 2); i++) {
-			if(i < (N_REAL_INPUT/2)){
+			if(i < ((n_sim_ant*N_INPUT)/(2*N_ANT))){
 				data_sim[2 * i] = 1;
 			}else{
 				data_sim[2 * i] = 0;
@@ -482,7 +480,7 @@ signed char* simulate_data_ubf(int n_pol, int n_chan, int nt) {
 		for (int p = 0; p < n_pol; p++) {
 			for (int t = 0; t < nt; t++) {
 				for (int a = 0; a < nants; a++) {
-					if(a < N_REAL_ANT){ 
+					if(a < n_sim_ant){ 
 						data_sim[2 * data_in_idx(p, 2, a, t, 0, n_pol, n_chan, nants, nt)] = 1;
 					}
 				}
@@ -517,7 +515,7 @@ signed char* simulate_data_ubf(int n_pol, int n_chan, int nt) {
 		for (int t = 0; t < nt; t++) {
 			for (int f = 0; f < n_chan; f++) {
 				for (int a = 0; a < nants; a++) {
-					if(a < N_REAL_ANT){
+					if(a < n_sim_ant){
 						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
 						// X polarization
 						data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, nants, nt)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
@@ -539,7 +537,7 @@ signed char* simulate_data_ubf(int n_pol, int n_chan, int nt) {
 		for (int t = 0; t < nt; t++) {
 			for (int f = 0; f < n_chan; f++) {
 				for (int a = 0; a < nants; a++) {
-					if(a < N_REAL_ANT){
+					if(a < n_sim_ant){
 						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
 						// X polarization
 						data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, nants, nt)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
@@ -559,10 +557,9 @@ signed char* simulate_data_ubf(int n_pol, int n_chan, int nt) {
 }
 
 // Generate simulated weights or coefficients
-float* simulate_coefficients_ubf(int n_pol, int n_beam, int n_chan) {
+float* simulate_coefficients_ubf(int n_sim_ant, int nants, int n_pol, int n_beam, int n_chan) {
 	float* coeff_sim;
 	coeff_sim = (float*)calloc(N_COEFF, sizeof(float));
-	int nants = N_ANT/2;
 	/*
 	'sim_flag' is a flag that indicates the kind of data that is simulated.
 	sim_flag = 0 -> Ones
@@ -657,7 +654,7 @@ float* simulate_coefficients_ubf(int n_pol, int n_beam, int n_chan) {
 }
 
 // Generate coefficients with delays and phase up solutions from HDF5 file
-float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_ant_config, int n_pol, int n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant) {
+float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_ant_config, int n_pol, int n_beam, int actual_n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant) {
 	float* coefficients;
 	coefficients = (float*)calloc(N_COEFF, sizeof(float));
 	double tau = 0;
@@ -672,7 +669,7 @@ float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, doub
 			for (int b = 0; b < n_beam; b++) {
 				for (int a = 0; a < n_ant_config; a++) {
 					if(a < n_real_ant){
-						tau = delay[delay_idx(a, b, n, n_real_ant, n_beam)];
+						tau = delay[delay_idx(a, b, n, n_real_ant, actual_n_beam)];
                                                 fc = (f + (subband_idx*n_coarse))+schan; // First frequency channel in the RAW file and on this node
 
 						coefficients[2 * coeff_idx(a, p, b, f, n_ant_config, n_pol, n_beam)] = (float)(phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].re*cos(2 * PI * coarse_chan[f] * tau) - phase_up[cal_all_idx(a, p, fc, n_real_ant, n_pol)].im*sin(2 * PI * coarse_chan[f] * tau));
@@ -721,29 +718,57 @@ float* data_test(signed char *sim_data){
 }
 
 //Comment out main() function when compiling for hpguppi
-// <----Uncomment here if testing standalone code
+/*// <----Uncomment here if testing standalone code
 // Test all of the kernels and functions, and write the output to
 // a text file for analysis
 int main() {
 	printf("Here!\n");
+	// ---------------------------- //
+	// To run in regular array configuration, enter values between 33 and 64 in n_beam and n_ant
+	// To run in subarray configuration, enter values 32 or less (and greater than 1 otherwise, beamforming can't be done)
+	// ---------------------------- //
 	int n_beam = 61;
         int n_pol = 2;
+	int n_sim_ant = 58;
+	int n_ant_config = 0;
+	int n_chan = 0;
+	int nt = 0;
+        int n_win = 0;
+	int n_time_int = 0;
+	if(n_sim_ant <= N_ANT/2){ // Subarray configuration
+		n_ant_config = N_ANT/2;
+		// 5 seconds worth of processing at a time
+		// 1k mode
+		//n_chan = 1; 
+	        //nt = 2*4096*1024; // 4194304; // 2^22
+		// 4k mode
+	    	n_chan = 4; // 64
+	        nt = 2*1024*1024; // 1048576; // 2^20
+		// 32k mode
+		//n_chan = 32;
+		//nt = 2*128*1024; // 131072; // 2^17
 
-	// 5 seconds worth of processing at a time
-	// 1k mode
-	//int n_chan = 1; 
-        //int nt = 4096*1024; // 4194304; // 2^22
-	// 4k mode
-    	int n_chan = 4; // 64
-        int nt = 1024*1024; // 1048576; // 2^20
-	// 32k mode
-    	//int n_chan = 32;
-        //int nt = 128*1024; // 131072; // 2^17
+		n_win = 16;
+		n_time_int = 16;
+	}else{ // Regular array configuration
+		n_ant_config = N_ANT;
+		// 5 seconds worth of processing at a time
+		// 1k mode
+		//n_chan = 1; 
+	        //nt = 4096*1024; // 4194304; // 2^22
+		// 4k mode
+		n_chan = 4; // 64
+	        nt = 1024*1024; // 1048576; // 2^20
+		// 32k mode
+		//n_chan = 32;
+		//nt = 128*1024; // 131072; // 2^17
 
-        int n_win = N_TIME_STI;
-	int n_time_int = N_TIME_STI;
+		n_win = 8;
+		n_time_int = 8;
+	}
+
         int n_samp = nt/n_win;
-	int n_sti = n_win/N_TIME_STI;
+	int n_sti = n_win/n_time_int;
 
 	// Allocate memory to all arrays used by run_FFT() 
 	init_upchan_beamformer();
@@ -751,12 +776,12 @@ int main() {
         printf("After init_upchan_beamformer() \n");
 
 	// Generate simulated data
-	signed char* sim_data = simulate_data_ubf(n_pol, n_chan, nt);
+	signed char* sim_data = simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, nt);
 
         printf("After simulate_data() \n");
 
 	// Generate simulated weights or coefficients
-	float* sim_coefficients = simulate_coefficients_ubf(n_pol, n_beam, n_chan);
+	float* sim_coefficients = simulate_coefficients_ubf(n_sim_ant, n_ant_config, n_pol, n_beam, n_chan);
 
 	printf("After simulate_coefficients() \n");
 
@@ -802,7 +827,6 @@ int main() {
 	float time_taken = 0;
 	float bf_time = 0;
 	int num_runs = 1;
-        int n_ant = N_REAL_ANT;
 
 	// Start timing FFT computation //
 	struct timespec tval_before, tval_after;
@@ -815,7 +839,7 @@ int main() {
                 // Things to keep in mind about FFT output:
 		// - FFT shift possibly required after FFT if too much memory is allocated
 		// - Output may need to be divided number of FFT points
-                output_data = run_upchannelizer_beamformer(sim_data, sim_coefficients, n_pol, n_ant, n_beam, n_chan, n_win, n_time_int, n_samp);
+                output_data = run_upchannelizer_beamformer(sim_data, sim_coefficients, n_pol, n_sim_ant, n_beam, n_chan, n_win, n_time_int, n_samp);
 
 		// Stop timing FFT computation //
 		clock_gettime(CLOCK_MONOTONIC, &tval_after);
@@ -868,4 +892,4 @@ int main() {
 
 	return 0;
 }
-// <----Uncomment here if testing standalone code
+*/// <----Uncomment here if testing standalone code
