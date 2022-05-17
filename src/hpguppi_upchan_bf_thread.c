@@ -598,7 +598,11 @@ static void *run(hashpipe_thread_args_t * args)
         // Set the number of beams to 64 (number set in upchannelizer_beamformer.h) if they are greater than 64 in the BFR5 file
         if(nbeams > N_BEAM){
           nbeams = N_BEAM;
-        } 
+        }
+        // In the subarray configuration the number of beams needs to be half due to mempry constraints with the 2080 Tis
+        if(nants <= N_ANT/2){
+          nbeams = N_BEAM/2;
+        }
 
         // Reset indexing of time array since new HDF5 file is in use
         time_array_idx = 0;

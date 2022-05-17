@@ -75,230 +75,6 @@ static long int get_file_size(int fdin){
     return file_size;
 }
 
-/*
-static int get_block_size(char * header_buf, size_t len)
-{
-    int i;
-    char bs_str[32];
-    int blocsize = 0;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "BLOCSIZE", 8)) {
-            strncpy(bs_str,header_buf+i+16, 32);
-            blocsize = strtoul(bs_str,NULL,0);
-            break;
-        }
-    }
-    return blocsize;
-}
-
-static int get_nants(char * header_buf, size_t len)
-{
-    int i;
-    char ants_str[32];
-    int nants = 0;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "NANTS", 8)) {
-            strncpy(ants_str,header_buf+i+16, 32);
-            nants = strtoul(ants_str,NULL,0);
-            break;
-        }
-    }
-    return nants;
-}
-
-static int get_npol(char * header_buf, size_t len)
-{
-    int i;
-    char npol_str[32];
-    int npol = 0;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "NPOL", 8)) {
-            strncpy(npol_str,header_buf+i+16, 32);
-            npol = strtoul(npol_str,NULL,0);
-            if(npol>1){
-                npol = 2;
-            }
-            break;
-        }
-    }
-    return npol;
-}
-
-static int get_obsnchan(char * header_buf, size_t len)
-{
-    int i;
-    char obs_str[32];
-    int obsnchan = 0;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "OBSNCHAN", 8)) {
-            strncpy(obs_str,header_buf+i+16, 32);
-            obsnchan = strtoul(obs_str,NULL,0);
-            break;
-        }
-    }
-    return obsnchan;
-}
-
-static int64_t get_cur_pktidx(char * header_buf, size_t len)
-{
-    int i;
-    char bs_str[32];
-    int64_t pktidx = 0;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "PKTIDX", 6)) {
-            strncpy(bs_str,header_buf+i+16, 32);
-            pktidx = strtoul(bs_str,NULL,0);
-            break;
-        }
-    }
-    return pktidx;
-}
-
-static int64_t get_pktstart(char * header_buf, size_t len)
-{
-    int i;
-    char bs_str[32];
-    int64_t pktstart = 0;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "PKTSTART", 6)) {
-            strncpy(bs_str,header_buf+i+16, 32);
-            pktstart = strtoul(bs_str,NULL,0);
-            break;
-        }
-    }
-    return pktstart;
-}
-
-static int64_t get_pktstop(char * header_buf, size_t len)
-{
-    int i;
-    char bs_str[32];
-    int64_t pktstop = 0;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "PKTSTOP", 6)) {
-            strncpy(bs_str,header_buf+i+16, 32);
-            pktstop = strtoul(bs_str,NULL,0);
-            break;
-        }
-    }
-    return pktstop;
-}
-
-static int64_t get_nxt_pktidx(int fdin, int blocsize, char * header_buf, size_t len)
-{
-    int i;
-    int rv;
-    char bs_str[32];
-    int64_t pktidx = 0;
-    // Go to start of next block
-    lseek(fdin, blocsize, SEEK_CUR);
-
-    // I don't know what the next block's header size is and I shouldn't make assumptions so read the max header size and offset back based off that
-    rv = read(fdin, header_buf, MAX_HDR_SIZE);
-    if (rv == -1) {
-        hashpipe_error("hpguppi_stride_input_thread", "error reading file");
-    } else if (rv > 0) {
-        //Read header loop over the 80-byte records
-        for (i=0; i<len; i += 80) {
-            if(!strncmp(header_buf+i, "PKTIDX", 6)) {
-                strncpy(bs_str,header_buf+i+16, 32);
-                pktidx = strtoul(bs_str,NULL,0);
-                break;
-            }
-        }
-        // Reset to the previous block
-        lseek(fdin,-1*(blocsize+MAX_HDR_SIZE),SEEK_CUR);
-    }else if(rv == 0){ // End of file has been reached
-        // Reset to the current packet's payload
-        lseek(fdin, -1*blocsize, SEEK_CUR);
-    }
-    return pktidx;
-}
-
-static int get_piperblk(char * header_buf, size_t len)
-{
-    int i;
-    char bs_str[32];
-    int piperblk = 0;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "PIPERBLK", 6)) {
-            strncpy(bs_str,header_buf+i+16, 32);
-            piperblk = strtoul(bs_str,NULL,0);
-            break;
-        }
-    }
-    return piperblk;
-}
-
-
-static void set_output_path(char * header_buf, char * outdir, size_t len)
-{
-    int i;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "DATADIR", 7)) {
-            hputs(header_buf, "DATADIR", outdir);
-            break;
-        }
-    }
-}
-
-
-static void set_pktidx(char * header_buf, int pktidx, size_t len)
-{
-    int i;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "PKTIDX", 8)) {
-            hputi4(header_buf, "PKTIDX", pktidx);
-            break;
-        }
-    }
-}
-
-
-static void set_blocksize(char * header_buf, int blocsize, size_t len)
-{
-    int i;
-    //Read header loop over the 80-byte records
-    for (i=0; i<len; i += 80) {
-        if(!strncmp(header_buf+i, "BLOCSIZE", 8)) {
-            hputi4(header_buf, "BLOCSIZE", blocsize);
-            break;
-        }
-    }
-}
-
-static ssize_t read_fully(int fd, void * buf, size_t bytes_to_read)
-{
-    ssize_t bytes_read;
-    ssize_t total_bytes_read = 0;
-
-    while(bytes_to_read > 0) {
-        bytes_read = read(fd, buf, bytes_to_read);
-        if(bytes_read <= 0) {
-            if(bytes_read == 0) {
-                break;
-            } else {
-                return -1;
-            }
-        }
-        buf += bytes_read;
-        bytes_to_read -= bytes_read;
-        total_bytes_read += bytes_read;
-    }
-    return total_bytes_read;
-}
-*/ 
-
 static void *run(hashpipe_thread_args_t * args)
 {
     hpguppi_input_databuf_t *db  = (hpguppi_input_databuf_t *)args->obuf;
@@ -513,6 +289,10 @@ static void *run(hashpipe_thread_args_t * args)
                             wait_filename = 1;
                             printf("STRIDE INPUT: Waiting for new RAW file name! \n");
                         }
+
+                        /* Will exit if thread has been cancelled */
+                        pthread_testcancel();
+
                         continue;
                     }
                     wait_filename = 0; // Print "waiting for new RAW file name" only once
@@ -1041,11 +821,14 @@ static void *run(hashpipe_thread_args_t * args)
                     block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
 
                 }
-
                 /* Will exit if thread has been cancelled */
                 pthread_testcancel();
             }
+            /* Will exit if thread has been cancelled */
+            pthread_testcancel();
         }
+        /* Will exit if thread has been cancelled */
+        pthread_testcancel();
     }
 
     // Thread success!
