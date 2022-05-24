@@ -100,7 +100,7 @@ static void *run(hashpipe_thread_args_t * args)
   const char * thread_name = args->thread_desc->name;
   const char * status_key = args->thread_desc->skey;
 
-  /* Read in general parameters */
+  // Read in general parameters
   struct hpguppi_params gp;
   struct psrfits pf;
   pf.sub.dat_freqs = NULL;
@@ -109,7 +109,7 @@ static void *run(hashpipe_thread_args_t * args)
   pf.sub.dat_scales = NULL;
   pthread_cleanup_push((void *)hpguppi_free_psrfits, &pf);
 
-  /* Init output file descriptor (-1 means no file open) */
+  // Init output file descriptor (-1 means no file open)
   static int fdraw[N_BEAM];
   memset(fdraw, -1, N_BEAM*sizeof(int));
   pthread_cleanup_push((void *)safe_close_all, fdraw);
@@ -119,7 +119,7 @@ static void *run(hashpipe_thread_args_t * args)
     hashpipe_error(thread_name, "ioprio_set IOPRIO_CLASS_RT");
   }
 
-  /* Loop */
+  // Loop
   int64_t pktidx=0, pktstart=0, pktstop=0;
   int blocksize=0; // Size of beamformer output (output block size)
   int curblock=0;
@@ -148,10 +148,8 @@ static void *run(hashpipe_thread_args_t * args)
   char raw_filename[200];
   char prev_basefilename[200];
   strcpy(prev_basefilename, "prev_basefilename"); // Initialize as different string that raw_basefilename
-  //char new_base[200];
   char raw_obsid[200];
-  //int header_size = 0;
-
+  
   // Filterbank file header initialization
   fb_hdr_t fb_hdr;
   fb_hdr.machine_id = 20;
@@ -193,11 +191,6 @@ static void *run(hashpipe_thread_args_t * args)
   hid_t file_id, npol_id, nbeams_id, obs_id, src_id, cal_all_id, delays_id, time_array_id, ra_id, dec_id, sid1, sid2, sid4, sid5, sid6, src_dspace_id, obs_type, native_obs_type, native_src_type; // identifiers //
   herr_t status, cal_all_elements, delays_elements, time_array_elements, ra_elements, dec_elements, src_elements;
 
-  //typedef struct complex_t{
-  //  float re;
-  //  float im;
-  //}complex_t;
-
   hid_t reim_tid;
   reim_tid = H5Tcreate(H5T_COMPOUND, sizeof(complex_t));
   H5Tinsert(reim_tid, "r", HOFFSET(complex_t, re), H5T_IEEE_F32LE);
@@ -218,17 +211,10 @@ static void *run(hashpipe_thread_args_t * args)
   FILE* coeffptr;
   int coeff_flag = 0 ;
 
-  //int a = 34; // Antenna index
-  //int b = 1;  // Beam index
-  //int t = 1;  // Time stamp index
-  //int p = 1;  // Polarization index
-  //int c = 223;// Coarse channel index
-
   float* bf_coefficients; // Beamformer coefficients
   float* tmp_coefficients; // Temporary coefficients
 
   // Frequency parameter initializations
-  //float coarse_chan_band = 0; // Coarse channel bandwidth
   double coarse_chan_freq[N_FREQ]; // Coarse channel center frequencies in the band 
   int n_chan_per_node = 0; // Number of coarse channels per compute node
   int n_coarse_proc = 0; // Number of coarse channels processed at a time
@@ -288,12 +274,12 @@ static void *run(hashpipe_thread_args_t * args)
   int rec_stop = 0; // Flag to free memory and show that processing stopped
   while (run_threads()) {
 
-    /* Note waiting status */
+    // Note waiting status
     hashpipe_status_lock_safe(st);
     hputs(st->buf, status_key, "waiting");
     hashpipe_status_unlock_safe(st);
 
-    /* Wait for buf to have data */
+    // Wait for buf to have data
     rv = hpguppi_input_databuf_wait_filled(db, curblock);
     if(rv!=0)continue;
     
@@ -302,7 +288,7 @@ static void *run(hashpipe_thread_args_t * args)
     hgeti4(st->buf, "SUBBAND", &subband_idx); // Get current index of subband being processed
     hashpipe_status_unlock_safe(st);
 
-    /* Read param struct for this block */
+    // Read param struct for this block
     ptr = hpguppi_databuf_header(db, curblock);
     if (first) {
       hpguppi_read_obs_params(ptr, &gp, &pf);
@@ -311,42 +297,31 @@ static void *run(hashpipe_thread_args_t * args)
       hpguppi_read_subint_params(ptr, &gp, &pf);
     }
     
-    /* Read pktidx, pktstart, pktstop from header */
+    // Read pktidx, pktstart, pktstop from header
     hgeti8(ptr, "PKTIDX", &pktidx);
     hgeti8(ptr, "PKTSTART", &pktstart);
     hgeti8(ptr, "PKTSTOP", &pktstop);
 
-    printf("UBF: Before pktidx >= pktstop, pktidx = %ld and pktstop = %ld \n", pktidx, pktstop);    
     if((pktidx >= pktstop) && (subband_idx == (n_subband-1) || subband_idx == 0)){
       coeff_flag = 0;
-      printf("UBF: Before freeing memory pktidx = %ld and pktstop = %ld \n", pktidx, pktstop);
       // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
       if(cal_all_data != NULL){
         free(cal_all_data);
-        printf("UBF: free(cal_all_data); \n");
         cal_all_data = NULL;
         free(delays_data);
-        printf("UBF: free(delays_data); \n");
         delays_data = NULL;
         free(time_array_data);
-        printf("UBF: free(time_array_data); \n");
         time_array_data = NULL;
         free(ra_data);
-        printf("UBF: free(ra_data); \n");
         ra_data = NULL;
         free(dec_data);
-        printf("UBF: free(dec_data); \n");
         dec_data = NULL;
         status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
-        printf("UBF: status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str); \n");
-        /* Mark as free */
+        // Mark as free
         hpguppi_input_databuf_set_free(db, curblock);
-        printf("UBF: Set block free! \n");
-        /* Go to next block */
+        // Go to next block
         curblock = (curblock + 1) % db->header.n_block;
-        printf("UBF: Advance to next block! \n");
       }
-      printf("UBF: Before closing files \n");
       for(int b = 0; b < nbeams; b++){
         // If file open, close it
         if(fdraw[b] != -1) {
@@ -356,9 +331,7 @@ static void *run(hashpipe_thread_args_t * args)
           fdraw[b] = -1;
         }
       }
-      printf("UBF: After closing files \n");
       got_packet_0 = 0;
-      //filenum = 0;
       block_count=0;
       // Print end of recording conditions only once
       if(rec_stop == 0){
@@ -373,16 +346,15 @@ static void *run(hashpipe_thread_args_t * args)
       }
       continue;
     }
-      
+    // Reset rec_stop flag to notify the user of the end of a scan
     rec_stop = 0;
-    //if(wait_count > 0)wait_count = 0;
 
     // Inform status buffer of processing status
     hashpipe_status_lock_safe(st);
     hgets(st->buf, "PROCSTAT", sizeof("START"), "START"); // Inform status buffer that the scan processing has started
     hashpipe_status_unlock_safe(st);
 
-    /* Get values for calculations at varying points in processing */
+    // Get values for calculations at varying points in processing
     hgetu8(ptr, "SYNCTIME", &synctime);
     hgetu8(ptr, "HCLOCKS", &hclocks);
     hgetu4(ptr, "FENCHAN", &fenchan);
@@ -391,7 +363,6 @@ static void *run(hashpipe_thread_args_t * args)
     hgetu8(ptr, "NANTS", &nants);
     hgetu8(ptr, "OBSNCHAN", &obsnchan);
     hgetu4(ptr, "SCHAN", &schan);
-    //hgetu8(ptr, "NPOL", &npol);
     hgetu8(ptr, "PIPERBLK", &piperblk);
     hgetu8(ptr, "STT_SMJD", &stt_smjd);
     hgetu8(ptr, "STT_IMJD", &stt_imjd);
@@ -406,14 +377,12 @@ static void *run(hashpipe_thread_args_t * args)
     hgets(st->buf, "OUTDIR", sizeof(outdir), outdir);
     hashpipe_status_unlock_safe(st);
 
+    // If the subarray configuration is in use (half the number of antennas)
     if(nants <= N_ANT/2){
       n_ant_config = N_ANT/2;
     }else{
       n_ant_config = N_ANT;
     }
-
-    printf("UBF: pktidx = %ld, pktstart = %ld, and pktstop = %ld\n", pktidx, pktstart, pktstop);
-    printf("UBF: schan = %d \n", (int)schan);
 
     // Get the appropriate basefile name from the stride_input_thread 
     // Get HDF5 file data at the beginning of the processing
@@ -427,10 +396,6 @@ static void *run(hashpipe_thread_args_t * args)
       // Calculate coarse channel center frequencies depending on the mode and center frequency that spans the RAW file
       n_chan_per_node = (int)obsnchan/nants; //((int)fenchan)/n_nodes;
       n_coarse_proc = n_chan_per_node/n_subband;
-      //coarse_chan_band = obsbw/n_chan_per_node; // full_bw/fenchan;
-
-      //printf("UBF: Number of channels per node (from RAW file) = %d\n", n_chan_per_node);
-      //printf("UBF: Number of antennas (from RAW file) = %d\n", (int)nants);
 
       // Skip zeroth index since the number of coarse channels is even and the center frequency is between the 2 middle channels
       for(int i=0; i<n_coarse_proc; i++){
@@ -440,29 +405,16 @@ static void *run(hashpipe_thread_args_t * args)
         //coarse_chan_freq[i] = ((i + subband_idx*n_coarse_proc)-(n_chan_per_node/2))*(chan_bw*1e-3) + (obsfreq*1e-3) + ((chan_bw/2)*1e-3);
       }
 
-      /*
-      printf("UBF: coarse_chan_freq[%d] = %lf GHz \n", 0, coarse_chan_freq[0]);
-      if(n_coarse_proc > 1){
-        printf("UBF: coarse_chan_freq[%d] = %lf GHz \n", n_coarse_proc/2, coarse_chan_freq[n_coarse_proc/2]);
-      }
-      printf("UBF: coarse_chan_freq[%d] = %lf GHz \n", n_coarse_proc-1, coarse_chan_freq[n_coarse_proc-1]);
-
-      printf("UBF: coarse_chan_band = %lf Hz \n", coarse_chan_band);
-      printf("UBF: chan_bw = %lf MHz \n", chan_bw);
-      */
-
       if((sim_flag == 0) && (block_count == 0)){
         hashpipe_status_lock_safe(st);
         hgets(st->buf, "BFRDIR", sizeof(bfrdir), bfrdir);
         hashpipe_status_unlock_safe(st);
-        //printf("UBF: bfrdir is: %s \n", bfrdir);
 
         // Set specified path to read from HDF5 files
         strcpy(hdf5_basefilename, bfrdir);
         strcat(hdf5_basefilename, "/");
         strcat(hdf5_basefilename, raw_basefilename);
         strcat(hdf5_basefilename, ".bfr5");
-        //printf("UBF: HDF5 file name with path: %s \n", hdf5_basefilename);
 
         // Read HDF5 file and get all necessary parameters (obsid, cal_all, delays, rates, time_array, ras, decs)
         // Open an existing file. //
@@ -475,13 +427,11 @@ static void *run(hashpipe_thread_args_t * args)
         obs_type = H5Dget_type(obs_id);
         native_obs_type = H5Tget_native_type(obs_type, H5T_DIR_DEFAULT);
         hdf5_obsidsize = (int)H5Tget_size(native_obs_type);
-        //printf("obsid string size = %d\n", hdf5_obsidsize);
         // Allocate memory to string array
         char hdf5_obsid[hdf5_obsidsize+1];
         hdf5_obsid[hdf5_obsidsize] = '\0'; // Terminate string
         // Read the dataset. // 
         status = H5Dread(obs_id, native_obs_type, H5S_ALL, H5S_ALL, H5P_DEFAULT, hdf5_obsid);
-        //printf("UBF: obsid = %s \n", hdf5_obsid);
         // Close the dataset. //
         status = H5Dclose(obs_id);
         // -----------------------------------------------//
@@ -503,8 +453,6 @@ static void *run(hashpipe_thread_args_t * args)
         for(int i=0; i<src_elements; i++) {
           printf("%d: len: %d, str is: %s\n", i, (int)src_names_str[i].len, (char *)src_names_str[i].p);
         }
-        // Free the memory and reset each element in the array //
-        //status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
 
         // Close the dataset //
         status = H5Dclose(src_id);
@@ -545,11 +493,6 @@ static void *run(hashpipe_thread_args_t * args)
         time_array_elements=H5Sget_simple_extent_npoints(sid4);
         ra_elements=H5Sget_simple_extent_npoints(sid5);
         dec_elements=H5Sget_simple_extent_npoints(sid6);
-        //printf("UBF: Number of elements in the cal_all dataset is : %d\n", cal_all_elements);
-        //printf("UBF: Number of elements in the delays dataset is : %d\n", delays_elements);
-        //printf("UBF: Number of elements in the time_array dataset is : %d\n", time_array_elements);
-        //printf("Number of elements in the ra dataset is : %d\n", ra_elements);
-        //printf("Number of elements in the dec dataset is : %d\n", dec_elements);
 
         // Allocate memory for array
         cal_all_data = malloc((int)cal_all_elements*sizeof(complex_t));
@@ -560,25 +503,18 @@ static void *run(hashpipe_thread_args_t * args)
 
         // Read the dataset. //
         status = H5Dread(npol_id, H5T_STD_I64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, &npol);
-        //printf("npol = %lu \n", npol);
 
         status = H5Dread(nbeams_id, H5T_STD_I64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, &nbeams);
-        //printf("nbeams = %lu \n", nbeams);
 
         status = H5Dread(cal_all_id, reim_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, cal_all_data);
-        //printf("UBF: cal_all_data[%d].re = %f \n", cal_all_idx(a, p, c, (int)nants, (int)npol), cal_all_data[cal_all_idx(a, p, c, (int)nants, (int)npol)].re);
 
         status = H5Dread(delays_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, delays_data);
-        //printf("UBF: delays_data[%d] = %lf \n", delay_idx(a, b, t, (int)nants, (int)nbeams), delays_data[delay_idx(a, b, t, (int)nants, (int)nbeams)]);
 
         status = H5Dread(time_array_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, time_array_data);
-        //printf("UBF: time_array_data[0] = %lf \n", time_array_data[0]);
 
         status = H5Dread(ra_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, ra_data);
-        //printf("ra_data[0] = %lf \n", ra_data[0]);
 
         status = H5Dread(dec_id, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, dec_data);
-        //printf("dec_data[0] = %lf \n", dec_data[0]);
 
         // Close the dataset. //
         status = H5Dclose(cal_all_id);
@@ -615,23 +551,19 @@ static void *run(hashpipe_thread_args_t * args)
         // strrchr() finds the last occurence of the specified character
         char_offset = strrchr(raw_basefilename, character);
         last_underscore_pos = char_offset-raw_basefilename;
-        //printf("UBF: The last position of %c is %ld \n", character, last_underscore_pos);
 
         // Get file name with source name
         memcpy(base_src, &raw_basefilename[0], last_underscore_pos);
         base_src[last_underscore_pos] = '\0';
-        //printf("UBF: File name with source name: %s \n", base_src);
 
         // Get basefilename with source name
         // strrchr() finds the last occurence of the specified character
         char_offset = strrchr(base_src, character);
         last_underscore_pos = char_offset-base_src;
-        //printf("UBF: The last position of %c is %ld \n", character, last_underscore_pos);
 
         // Get file name with no source name
         memcpy(base_no_src, &base_src[0], last_underscore_pos+1);
         base_no_src[last_underscore_pos+1] = '\0';
-        //printf("UBF: File name with no source name: %s \n", base_no_src);
 
         // Number of FFT points depending on mode
         if(n_coarse_proc == 1){        // 1k mode
@@ -642,25 +574,20 @@ static void *run(hashpipe_thread_args_t * args)
           n_fft = 16384;  // 2^14 point FFT
         }
         n_samp_spec = n_fft*n_win_spec;
-        //printf("UBF: After getting n_fft = %d and n_coarse_proc = %d \n", n_fft, n_coarse_proc);
       }
 
       if(sim_flag == 1){
         nbeams = 1; // Generate one filterbank file with the boresight beam
         npol = 2; // Number of polarizations needs to be specified
-        //printf("UBF: Number of beams = %lu, just the boresight beam \n", nbeams);
         // Set specified path to write filterbank files
         strcpy(fb_basefilename, outdir);
         strcat(fb_basefilename, "/");
         strcat(fb_basefilename, raw_basefilename);
-        //printf("UBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
       }
 
       // If this is a new scan, write headers and so on to new filterbank files
       got_packet_0 = 0;
     }
-
-    //printf("UBF: Before getting n_samp \n");
 
     // Number of time samples in a RAW file
     hashpipe_status_lock_safe(st);
@@ -677,27 +604,16 @@ static void *run(hashpipe_thread_args_t * args)
       n_samp = 2*n_samp_spec;
     }
 
-    //printf("UBF: After getting n_samp = %d \n", n_samp);
-
     // Number of time samples used for FFT (Number of FFT points)
     n_time_int = n_samp/n_fft;
-
-    //printf("UBF: After getting n_time_int = %d \n", n_time_int);
 
     // Number of spectra windows
     n_win = n_time_int;
 
-    //printf("UBF: After getting n_win = %d \n", n_win);
-
     // Number of STI windows 
     n_sti = n_win/n_time_int;
 
-    //printf("UBF: After getting n_sti = %d \n", n_sti);
-
-    //printf("UBF: Got center frequency, obsfreq = %lf MHz, n. time samples = %d \n", obsfreq, n_fft);
-
     // Size of beamformer output
-    //blocksize=((N_BF_POW*n_chan_per_node*n_win)/(N_BEAM*N_FREQ*N_STI))*sizeof(float); 
     blocksize= n_coarse_proc*n_fft*n_sti*sizeof(float); 
 
     if(sim_flag == 0){
@@ -732,22 +648,14 @@ static void *run(hashpipe_thread_args_t * args)
         time_array_idx = time_array_elements-2;
       }
 
-      printf("UBF: Unix time in the middle of the block (pktidx_time + tbin*n_samp/2) = %lf\n", block_midtime);
-      printf("UBF: (time_array_data[%d] + time_array_data[%d])/2 = %lf\n", time_array_idx, time_array_idx+1, time_array_midpoint);
-
       // Update coefficients every specified number of blocks
       if(block_midtime >= time_array_midpoint){
-        //printf("UBF: Updating coefficients since block_midtime >= time_array_midpoint! \n");
         // Then update with delays[n+1]
         time_array_idx += 1;
-
-        printf("UBF: time_array_idx = %d, time_array_midpoint = %lf\n", time_array_idx, time_array_midpoint);
 
         // Update coefficients with new delay
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
         tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, n_ant_config, (int)npol, (int)nbeams, actual_nbeams, (int)schan, n_coarse_proc, subband_idx, nants);
-
-        printf("UBF: After generate_coefficients_ubf \n");
 
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
 
@@ -791,7 +699,6 @@ static void *run(hashpipe_thread_args_t * args)
 
       // Update filterbank headers based on raw params, Nts, and BFR5 params etc.
       // Technically unnecessary for now, but I might move all of the filterbank header info below to this function so leaving it here for now
-      printf("UBF: update_fb_hdrs_from_raw_hdr_cbf(fb_hdr, ptr) \n");
       update_fb_hdrs_from_raw_hdr_ubf(fb_hdr, ptr);
 
       // Open nbeams filterbank files to save a beam per file i.e. N_BIN*n_fft*sizeof(float) per file.
@@ -804,7 +711,6 @@ static void *run(hashpipe_thread_args_t * args)
             strcat(fb_basefilename, "/");
             strcat(fb_basefilename, base_no_src);
             strcat(fb_basefilename, (char *)src_names_str[b].p);
-            //printf("UBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
             if(subband_idx >= 0 && subband_idx < 10) {
               sprintf(fname, "%s.SB0%d.B0%d.fil",  fb_basefilename, subband_idx, b);
@@ -820,7 +726,6 @@ static void *run(hashpipe_thread_args_t * args)
           strcat(fb_basefilename, "/");
           strcat(fb_basefilename, base_no_src);
           strcat(fb_basefilename, (char *)src_names_str[b].p);
-          //printf("UBF: Filterbank file name with new path and no file number or extension yet: %s \n", fb_basefilename);
 
           if(subband_idx >= 0 && subband_idx < 10) {
             sprintf(fname, "%s.SB0%d.B%d.fil",  fb_basefilename, subband_idx, b);
@@ -842,7 +747,6 @@ static void *run(hashpipe_thread_args_t * args)
         }
     	posix_fadvise(fdraw[b], 0, 0, POSIX_FADV_DONTNEED);
       }
-      printf("UBF: Opened filterbank files after for() loop \n");
 
       // Get center frequency depending on mode (1k, 4k or 32k)
       if(n_coarse_proc == 1){
@@ -851,8 +755,6 @@ static void *run(hashpipe_thread_args_t * args)
         half_n_coarse_proc = (n_coarse_proc/2);
         center_freq = ((coarse_chan_freq[half_n_coarse_proc-1]+coarse_chan_freq[half_n_coarse_proc])/2)*1e3;
       }
-
-      printf("UBF: Center frequency of filterbank files = %lf MHz \n", center_freq);
 
       // Filterbank header values for now
       fb_hdr.telescope_id = 64; // MeerKAT ID (Don't know why it's 64, maybe associated with the number of antennas)
@@ -866,8 +768,7 @@ static void *run(hashpipe_thread_args_t * args)
       strncpy(fb_hdr.rawdatafile, raw_filename, 80);
       fb_hdr.rawdatafile[80] = '\0';
 
-      /* Write filterbank header to output file */
-      printf("UBF: Writing headers to filterbank files! \n");
+      // Write filterbank header to output file
       for(int b = 0; b < nbeams; b++){
         fb_hdr.ibeam =  b;
         if(sim_flag == 0){
@@ -880,29 +781,25 @@ static void *run(hashpipe_thread_args_t * args)
       }
     }
 
-    /* If we got packet 0, process and write data to disk */
+    // If we got packet 0, process and write data to disk
     if (got_packet_0) {
 
-      /* Note writing status */
+      // Note writing status
       hashpipe_status_lock_safe(st);
       hputs(st->buf, status_key, "writing");
       hashpipe_status_unlock_safe(st);
-
-      printf("UBF: Before run_beamformer! \n");
 
       // Start timing beamforming computation
       struct timespec tval_before, tval_after;
       clock_gettime(CLOCK_MONOTONIC, &tval_before);
 
       if(sim_flag == 0){
-        //output_data = run_beamformer((signed char *)&db->block[curblock].data, bf_coefficients, (int)npol, (int)nbeams, n_chan_per_node, n_fft);
         output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, bf_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft);
       }else if(sim_flag == 1){
-        //output_data = run_beamformer((signed char *)&db->block[curblock].data, tmp_coefficients, (int)npol, (int)nbeams, n_chan_per_node, n_fft);
         output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, tmp_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft);
       }
 
-      /* Set beamformer output (CUDA kernel before conversion to power), that is summing, to zero before moving on to next block*/
+      // Set beamformer output (CUDA kernel before conversion to power), that is summing, to zero before moving on to next block
       //set_to_zero_ubf();
 
       // Stop timing beamforming computation
@@ -913,14 +810,11 @@ static void *run(hashpipe_thread_args_t * args)
 
       printf("UBF: run_beamformer() plus set_to_zero() time: %f s\n", bf_time);
 
-      //printf("UBF: First element of output data: %f and writing to filterbank files \n", output_data[0]);
-
       // Start timing write
       struct timespec tval_before_w, tval_after_w;
       clock_gettime(CLOCK_MONOTONIC, &tval_before_w);
 
       for(int b = 0; b < nbeams; b++){
-        //rv = write(fdraw[b], &output_data[b*n_fft*n_chan_per_node], (size_t)blocksize);
         rv = write(fdraw[b], &output_data[b*n_coarse_proc*n_fft*n_sti], (size_t)blocksize);
         if(rv != blocksize){
           char msg[100];
@@ -929,7 +823,7 @@ static void *run(hashpipe_thread_args_t * args)
           hashpipe_error(thread_name, msg);
         }
 
-        /* flush output */
+        // flush output
         fsync(fdraw[b]);
       }
       // Stop timing write
@@ -941,24 +835,24 @@ static void *run(hashpipe_thread_args_t * args)
       
       printf("UBF: After write() function! Block index = %d \n", block_count);
 
-      /* Increment counter */
+      // Increment counter
       block_count++;
     }
 
-    /* Mark as free */
+    // Mark as free
     hpguppi_input_databuf_set_free(db, curblock);
 
-    /* Go to next block */
+    // Go to next block
     curblock = (curblock + 1) % db->header.n_block;
 
-    /* Check for cancel */
+    // Check for cancel
     pthread_testcancel();
 
   }
 
   pthread_cleanup_pop(0); // Closes safe_close 
 
-  pthread_cleanup_pop(0); /* Closes hpguppi_free_psrfits */
+  pthread_cleanup_pop(0); // Closes hpguppi_free_psrfits
 
   // Free up device memory
   Cleanup_beamformer();

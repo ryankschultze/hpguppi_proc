@@ -39,6 +39,9 @@
 #define VERBOSE2 0
 #define TIMING 0
 
+// -------------------------------------------------------------- //
+// Function that gets the header size of a block in a RAW file
+// -------------------------------------------------------------- //
 static int get_header_size(int fdin, char * header_buf, size_t len)
 {
     int rv;
@@ -67,7 +70,9 @@ static int get_header_size(int fdin, char * header_buf, size_t len)
     return i;
 }
 
+// -------------------------------------------------------------- //
 // Get file size to determine number of blocks in the file
+// -------------------------------------------------------------- //
 static long int get_file_size(int fdin){
     off_t cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
     off_t file_size = lseek(fdin, (size_t)0, SEEK_END);
@@ -81,10 +86,14 @@ static void *run(hashpipe_thread_args_t * args)
     hashpipe_status_t st = args->st;
     const char * status_key = args->thread_desc->skey;
 
+    // -------------------------------------------------------------- //
     // Reinitialize subband index to 0
+    // -------------------------------------------------------------- //
     hputi4(st.buf, "SUBBAND", 0);
 
-    /* Main loop */
+    // -------------------------------------------------------------- //
+    // Variables and pointers used in main loop
+    // -------------------------------------------------------------- //
     int rv;
     int block_idx = 0;
     int block_count=0, filenum=0;
@@ -130,13 +139,16 @@ static void *run(hashpipe_thread_args_t * args)
 
     char outdir[256];
     hgets(st.buf, "OUTDIR", sizeof(outdir), outdir);
-    /* Init output file descriptor (-1 means no file open) */
-    static int fdin = -1;
+    static int fdin = -1; // Init output file descriptor (-1 means no file open)
     char *header;
     char header_buf[MAX_HDR_SIZE];
     int headersize; // Possibly padded depending on directio flag
     int open_flags = O_RDONLY;
     int directio = 0;
+
+    // -------------------------------------------------------------- //
+    // Simulated data set up. Set sim_flag to 1 if simulated data is wanted.
+    // -------------------------------------------------------------- //
     int sim_flag = 0; // Set to 1 if you'd like to use simulated data rather than the payload from the RAW file
     char * sim_data; // Initialize simulated data array
     int n_ant_config = 0;
@@ -189,10 +201,11 @@ static void *run(hashpipe_thread_args_t * args)
         hputs(st.buf, status_key, "waiting");
         hputi4(st.buf, "NETBKOUT", block_idx);
         hashpipe_status_unlock_safe(&st);
+        // -------------------------------------------------------------- //
         // Wait for data
-        /* Wait for new block to be free, then clear it
-         * if necessary and fill its header with new values.
-         */
+        // Wait for new block to be free, then clear it
+        // if necessary and fill its header with new values.
+        // -------------------------------------------------------------- //
 #if VERBOSE
 	printf("STRIDE INPUT: while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) \n");
 #endif
@@ -214,17 +227,28 @@ static void *run(hashpipe_thread_args_t * args)
 	printf("STRIDE INPUT: Before file open if{} \n");
 #endif
 
-        // Stride through RAW file to get all time samples for specific subband in the RAW file and place in buffer accordingly
+        // -------------------------------------------------------------- //
+        // Stride through RAW file to get all time samples for specific 
+        // subband in the RAW file and place in buffer accordingly
+        // -------------------------------------------------------------- //
         for(int s = 0; s<n_subband; s++){ // Shift to next subband of 16
+            // -------------------------------------------------------------- //
             // Write index of subband to status buffer
+            // -------------------------------------------------------------- //
             hputi4(st.buf, "SUBBAND", s);
 
+            // -------------------------------------------------------------- //
             // At the beginning of a file so set end_of_scan == 0
+            // -------------------------------------------------------------- //
             end_of_scan = 0;
 
+            // -------------------------------------------------------------- //
             // Iterate through blocks until the end of a sequence of RAW files
+            // -------------------------------------------------------------- //
             while(!end_of_scan){
+                // -------------------------------------------------------------- //
                 // Read raw files
+                // -------------------------------------------------------------- //
                 if (fdin == -1) { //no file opened
                     // If there is no file ready at the beginning of processing then wait for it to be written to the buffer.
                     while(strlen(cur_fname) == 0){
@@ -249,7 +273,6 @@ static void *run(hashpipe_thread_args_t * args)
                                 strcpy(cur_fname, indir); // Use cur_fname as the current file name variable moving forward
                             }
                         }
-                        //printf("STRIDE INPUT: Got current RAW file: %s\n", cur_fname);
                     }
                     // Now create the basefilename
                     // If a '...0000.raw' file exists, that is different from the previous '...0000.raw' file
@@ -260,14 +283,11 @@ static void *run(hashpipe_thread_args_t * args)
                         period_pos = base_pos-cur_fname;
 
                         memcpy(basefilename, cur_fname, period_pos); // Copy base filename portion of file name to tmp_basefilename variable
-                
-
 
                         // Get basefilename with no path and place in status buffer
                         // strrchr() finds the last occurence of the specified character
                         char_offset = strrchr(basefilename, character);
                         slash_pos = char_offset-basefilename;
-
 
                         // Get file name with no path
                         memcpy(new_base, &basefilename[slash_pos+1], sizeof(basefilename)-slash_pos);
@@ -290,7 +310,7 @@ static void *run(hashpipe_thread_args_t * args)
                             printf("STRIDE INPUT: Waiting for new RAW file name! \n");
                         }
 
-                        /* Will exit if thread has been cancelled */
+                        // Will exit if thread has been cancelled
                         pthread_testcancel();
 
                         continue;
@@ -310,7 +330,6 @@ static void *run(hashpipe_thread_args_t * args)
 
                     headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE);
 
-                    //blocsize = get_block_size(header_buf, MAX_HDR_SIZE);
                     hgeti4(header_buf, "BLOCSIZE", &blocsize);
 
 #if VERBOSE
@@ -319,22 +338,30 @@ static void *run(hashpipe_thread_args_t * args)
                     printf("STRIDE INPUT: blocsize = %d \n", blocsize);
 #endif
 
+                    // Reset file position back to the beginning of the file
                     lseek(fdin, 0, SEEK_SET);
                 }
 
+                // -------------------------------------------------------------- //
                 // Get the current position of the file
+                // -------------------------------------------------------------- //
                 cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
 
 #if VERBOSE
                 printf("STRIDE INPUT: current position = %ld and file number = %d \n", cur_pos, filenum);
 #endif
 
-                //Handling header - size, output path, directio----------------
+                // -------------------------------------------------------------- //
+                //Handling header - size, output path, directio
+                // -------------------------------------------------------------- //
                 headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE);
                 printf("STRIDE INPUT: current position = %ld, raw_file_size = %ld and headersize = %d \n", cur_pos, raw_file_size, headersize);
 
-                // If we are not at the end of the file, read blocks and transfer to shared mem buffer
-                // else if we are at the end, move on to the next file
+                // -------------------------------------------------------------- //
+                // If we are not at the end of the file, read blocks and transfer 
+                // to shared mem buffer else if we are at the end, move on to the 
+                // next file
+                // -------------------------------------------------------------- //
                 if(((raw_file_size-cur_pos)>=(blocsize+headersize))){
 #if VERBOSE
                     printf("STRIDE INPUT: In if((raw_file_size-cur_pos)>=(blocsize+headersize)){ \n");
@@ -345,8 +372,6 @@ static void *run(hashpipe_thread_args_t * args)
 #if VERBOSE
                         printf("STRIDE INPUT: In if(n_missed_blks == 0){ \n");
 #endif
-//                        //Handling header - size, output path, directio----------------
-//                        headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE);
 
                         if(block_count == 0){
 #if VERBOSE
@@ -367,7 +392,6 @@ static void *run(hashpipe_thread_args_t * args)
                         memcpy(header, &header_buf, headersize);
                         hashpipe_status_unlock_safe(&st);
 
-                        //printf("STRIDE INPUT: directio = hpguppi_read_directio_mode(header); \n");
                         directio = hpguppi_read_directio_mode(header);
 
                         // Adjust length for any padding required for DirectIO
@@ -446,20 +470,15 @@ static void *run(hashpipe_thread_args_t * args)
                                 // Reset to beginning of block after headert (start position of the payload)
                                 lseek(fdin, payload_start, SEEK_SET);
                                 // Offset by antenna and coarse channel index taking the subband index into account as well
-                                //lseek(fdin, data_blk_in_idx(0, 0, (c + n_coarse_proc*s), a, npol, n_samp_per_block, n_coarse_proc), SEEK_CUR);
                                 lseek(fdin, data_blk_in_idx(0, 0, (c + n_coarse_proc*s), a, npol, n_samp_per_block, n_coarse), SEEK_CUR);
                                 // Place input data in shared memory buffer (from RAW file or simulated)
                                 if(sim_flag == 0){
                                     // Read the remaining dimensions in the RAW block (npol and n_samp_per_block) and place in the shared memory buffer block
-                                    //read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,0,block_count,c,a,npol,n_samp_per_block,n_blocks,n_coarse_proc)], npol*n_samp_per_block);
                                     for(t = 0; t<n_samp_per_block; t++){
-                                        //printf("STRIDE INPUT: payload_start = %ld, antenna idx = %d, coarse channel idx = %d, and time sample idx = %d \n", payload_start, a, c, t);
-                                        //printf("STRIDE INPUT: Raw block index = %d, and Shared memory block index = %d \n", data_blk_in_idx(0, 0, (c + n_coarse_proc*s), a, npol, n_samp_per_block, n_coarse), data_shm_blk_idx(0,c,a,t,block_count,npol,n_coarse_proc,nants,n_samp_per_block));
                                         read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,c,a,t,block_count,npol,n_coarse_proc,nants,n_samp_per_block)], Niq*npol);
                                     }
                                 } else{
                                     // Copy simulated data to shared memory buffer block - data_sim_in_idx(p, c, a, t, Np, Nc, Na)
-                                    //memcpy(&ptr[data_sim_in_idx(0,0,0,c,a,n_pol,n_samp,1,n_chan)], &sim_data[data_sim_in_idx(0,0,0,c,a,n_pol,n_samp,1,n_chan)], n_pol*n_samp);
                                     for(int t = 0; t<n_samp; t++){
                                         memcpy(&ptr[data_sim_in_idx(0,c,a,t,n_pol,n_chan,N_ANT)], &sim_data[data_sim_in_idx(0,c,a,t,n_pol,n_chan,N_ANT)], Niq*n_pol);
                                     }
@@ -467,7 +486,6 @@ static void *run(hashpipe_thread_args_t * args)
                             }
                         }
 
-                        //cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
                         // Offset to end of a block (move through all subbands to get to the next block)
                         cur_pos = lseek(fdin, data_blk_in_idx(0, 0, (n_coarse-(n_coarse_proc*(s+1))), 0, npol, n_samp_per_block, n_coarse), SEEK_CUR);
 
@@ -491,7 +509,6 @@ static void *run(hashpipe_thread_args_t * args)
                     } else if(n_missed_blks > 0){
                         if(block_count == 0){
                             headersize= get_header_size(fdin, header_buf, MAX_HDR_SIZE);
-                            //piperblk = get_piperblk(header_buf, MAX_HDR_SIZE);
                             hgeti4(header_buf, "PIPERBLK", &piperblk);
 
                             // Copy the same header info from previous block to zero block in buffer
@@ -519,7 +536,6 @@ static void *run(hashpipe_thread_args_t * args)
 
                         // Set pktidx in the header of the shared memory buffer block (header_buf)
                         zero_blk_pktidx -= n_missed_blks*piperblk;
-                        //set_pktidx(header_buf, zero_blk_pktidx, MAX_HDR_SIZE);
                         hputi8(header_buf, "PKTIDX", zero_blk_pktidx);
 
                         // Copy block of zeros to block in buffer
@@ -536,7 +552,6 @@ static void *run(hashpipe_thread_args_t * args)
                                     // Reset to beginning of block after headert (start position of the payload)
                                     lseek(fdin, payload_start, SEEK_SET);
                                     // Offset by antenna and coarse channel index taking the subband index into account as well
-                                    //lseek(fdin, data_blk_in_idx(0, 0, (c + n_coarse_proc*s), a, npol, n_samp_per_block, n_coarse_proc), SEEK_CUR);
                                     lseek(fdin, data_blk_in_idx(0, 0, (c + n_coarse_proc*s), a, npol, n_samp_per_block, n_coarse), SEEK_CUR);
                                     // Place input data in shared memory buffer from RAW file
                                     // Read the remaining dimensions in the RAW block (npol and n_samp_per_block) and place in the shared memory buffer block
@@ -546,7 +561,6 @@ static void *run(hashpipe_thread_args_t * args)
                                 }
                             }
 
-                            //cur_pos = lseek(fdin, (size_t)0, SEEK_CUR);
                             cur_pos = lseek(fdin, data_blk_in_idx(0, 0, (n_coarse-(n_coarse_proc*(s+1))), 0, npol, n_samp_per_block, n_coarse), SEEK_CUR);
                             printf("STRIDE INPUT: Missed blocks replaced with zeros. After read current position = %ld \n", cur_pos);
 
@@ -595,9 +609,6 @@ static void *run(hashpipe_thread_args_t * args)
                         // Get raw file size in order to calculate the number of blocks in the file
                         raw_file_size = get_file_size(fdin);
 
-                        // Start from the beginning of scan (position 0 of filenum=0), but process next subband
-                        //lseek(fdin, 0, SEEK_SET); // Probably unnecessary, but doesn't hurt
-
                         // Reset previous pktidx to 0 for the next scan
                         prev_pktidx = 0;
 
@@ -611,18 +622,7 @@ static void *run(hashpipe_thread_args_t * args)
 
                         // Inform the downstream thread that we have reached the end of a scan
                         if(cur_pktidx < pktstop){
-                            printf("STRIDE INPUT: (In if(cur_pktidx < pktstop)) cur_pktidx = %ld and pktstop = %ld \n", cur_pktidx, pktstop);
-                            // Mark block as full
-                            //hpguppi_input_databuf_set_filled(db, block_idx);
-                            //printf("STRIDE INPUT: After hpguppi_input_databuf_set_filled() block_idx = %d \n", block_idx);
-
-                            // Setup for next block
-                            //block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
-                            //printf("STRIDE INPUT: Next block_idx = %d \n", block_idx);
-                            
-
                             hgeti8(header_buf, "PKTIDX", &cur_pktidx);
-                            printf("STRIDE INPUT: After hgeti8(header_buf, pktidx) cur_pktidx = %ld \n", cur_pktidx);
 
                             // Create a header for a dummy block
                             header = hpguppi_databuf_header(db, block_idx);
@@ -631,15 +631,11 @@ static void *run(hashpipe_thread_args_t * args)
                             memcpy(header, &header_buf, headersize);
                             hashpipe_status_unlock_safe(&st);
 
-                            printf("STRIDE INPUT: After copying header_buf to header = %d \n", headersize);
-
                             // Send dummy block with PKTIDX set to PKTSTOP (Make sure that PKTIDX is set to PKTSTOP)
                             hputi8(header, "PKTIDX", pktstop);
-                            printf("STRIDE INPUT: After hputi8(header, pktstop) pktstop = %ld \n", pktstop);
 
                             // Initialize block
                             ptr = hpguppi_databuf_data(db, block_idx);
-                            printf("STRIDE INPUT: After hpguppi_databuf_data() block_idx = %d \n", block_idx);
 
                             // Copy block of zeros to block in buffer
                             memcpy(ptr, zero_blk, N_INPUT);
@@ -688,7 +684,6 @@ static void *run(hashpipe_thread_args_t * args)
                         memcpy(header, &header_buf, headersize);
                         hashpipe_status_unlock_safe(&st);
 
-                        //printf("STRIDE INPUT: directio = hpguppi_read_directio_mode(header); \n");
                         directio = hpguppi_read_directio_mode(header);
 
                         // Adjust length for any padding required for DirectIO
@@ -770,9 +765,6 @@ static void *run(hashpipe_thread_args_t * args)
                             // Get raw file size in order to calculate the number of blocks in the file
                             raw_file_size = get_file_size(fdin);
 
-                            // Start from the beginning of scan (position 0 of filenum=0), but process next subband
-                            //lseek(fdin, 0, SEEK_SET); // Probably unnecessary, but doesn't hurt
-
                             // Reset previous pktidx to 0 for the next scan
                             prev_pktidx = 0;
 
@@ -784,10 +776,6 @@ static void *run(hashpipe_thread_args_t * args)
 
                             // Inform the downstream thread that we have reached the end of a scan
                             if(cur_pktidx < pktstop){
-                                // Send dummy block with PKTIDX set to PKTSTOP
-                                //set_pktidx(header_buf, pktstop, MAX_HDR_SIZE);
-                                //hputi8(header_buf, "PKTIDX", pktstop);
-
                                 // Create a header for a dummy block
                                 header = hpguppi_databuf_header(db, block_idx);
                                 hashpipe_status_lock_safe(&st);
@@ -795,8 +783,6 @@ static void *run(hashpipe_thread_args_t * args)
                                 memcpy(header, &header_buf, headersize);
                                 hashpipe_status_unlock_safe(&st);
 
-                                // Send dummy block with PKTIDX set to PKTSTOP
-                                //set_pktidx(header, pktstop, MAX_HDR_SIZE);
                                 hputi8(header, "PKTIDX", pktstop);
 
                                 // Initialize block
@@ -821,13 +807,13 @@ static void *run(hashpipe_thread_args_t * args)
                     block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
 
                 }
-                /* Will exit if thread has been cancelled */
+                // Will exit if thread has been cancelled
                 pthread_testcancel();
             }
-            /* Will exit if thread has been cancelled */
+            // Will exit if thread has been cancelled
             pthread_testcancel();
         }
-        /* Will exit if thread has been cancelled */
+        // Will exit if thread has been cancelled
         pthread_testcancel();
     }
 
