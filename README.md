@@ -16,7 +16,7 @@ To configure and compile the first time:
  $ libtoolize
  $ autoconf
  $ autoreconf -is
- $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent\_beamformer=../lib --with-libupchannelizer\_beamformer=../lib
+ $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib --with-libupchannelizer_beamformer=../lib
  $ make
  ```
 
@@ -24,7 +24,7 @@ To configure and compile any other time after:
 ```
  $ cd src
  $ autoreconf -is
- $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent\_beamformer=../lib --with-libupchannelizer\_beamformer=../lib
+ $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib --with-libupchannelizer_beamformer=../lib
  $ make
  ```
 
@@ -40,7 +40,7 @@ If python library is required:
 ```
  $ cd src
  $ autoreconf -is
- $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent\_beamformer=../lib --with-libupchan\_beamformer=../lib --with-libpython3.7m=/opt/conda/lib
+ $ ./configure --with-libsla=/usr/local/listen/lib --with-libcoherent_beamformer=../lib --with-libupchan_beamformer=../lib --with-libpython3.7m=/opt/conda/lib
  $ make
  ```
 
@@ -57,21 +57,21 @@ To compile the standalone code, uncomment the main() in the .cu script and use t
 This link helps show which SM architectures correspond to a particular GPU: [link](https://arnon.dk/matching-sm-architectures-arch-and-gencode-for-various-nvidia-cards/)
 There are two beamformers, one without upchannelization, and one with upchannelization. The beamformer without upchannelization can be found in the coherent\_beamformer directory in hpguppi\_proc, and can be compiled with the following command:
 ```
- $ nvcc -o coherent\_beamformer\_char\_in.exe -arch=sm\_86 coherent\_beamformer\_char\_in.cu
+ $ nvcc -o coherent_beamformer_char_in.exe -arch=sm_86 coherent_beamformer_char_in.cu
 ```
 And to run the executable:
 ```
- $ ./coherent\_beamformer\_char\_in.exe
+ $ ./coherent_beamformer_char_in.exe
 ```
  
 The beamformer with upchannelization can be found in the upchannelizer\_beamformer directory in hpguppi_proc, and can be compiled with the following command:
 ```
- $ nvcc -o upchannelizer\_beamformer.exe -arch=sm\_86 upchannelizer\_beamformer.cu -lcufft
+ $ nvcc -o upchannelizer_beamformer.exe -arch=sm_86 upchannelizer_beamformer.cu -lcufft
 ```
 
 And to run the executable:
 ```
- $ ./upchannelizer\_beamformer.exe
+ $ ./upchannelizer_beamformer.exe
 ```
 
 ### Shared Object library:
@@ -100,7 +100,7 @@ Before compiling this code, ensure that the coherent beamformer library has been
 **READ THE NEXT FEW PARAGRAPHS BEFORE RUNNING THE NEXT COMMAND:** 
 After the code is compiled, a shell script called readraw\_init.sh is run with the following command to process data from the GUPPI raw files of a recording:
 ```
- $ ./readraw\_init.sh cbf
+ $ ./readraw_init.sh cbf
 ```
 
 where cbf is the mode that will run, and stands for coherent beamformer.
@@ -113,7 +113,7 @@ However, for the coherent beamformer to run smoothly, before the GUPPI RAW file 
 
 The paths and file names are placed in the buffer with the following command:
 ```
-hashpipe\_check\_status -k \<keyword\> -s \<keyword string\>
+hashpipe_check_status -k <keyword> -s <keyword string>
 ```
 The keywords are INPUTDIR, RAWFILE, BFR5DIR, and OUTDIR which are the GUPPI RAW file path, GUPPI RAW file name, beamformer recipe file path, and the filterbank file path respectively.
 
@@ -123,39 +123,39 @@ The following are examples of how to set the keywords given paths that were bein
 
 To set the GUPPI RAW file path:
 ```
-hashpipe\_check\_status -k INPUTDIR -s /mydatag/20220120/0024/Unknown/GUPPI
+hashpipe_check_status -k INPUTDIR -s /mydatag/20220120/0024/Unknown/GUPPI
 ```
 
 To set the beamformer recipe file path:
 ```
-hashpipe\_check\_status -k BFRDIR -s /home/obs/20220120/0024
+hashpipe_check_status -k BFRDIR -s /home/obs/20220120/0024
 ```
 
 To set the filterbank (output) file path:
 ```
-hashpipe\_check\_status -k OUTDIR -s /mydatag/20220120/0024
+hashpipe_check_status -k OUTDIR -s /mydatag/20220120/0024
 ```
 
 And to set the GUPPI RAW file name:
 ```
-hashpipe\_check\_status -k RAWFILE -s guppi...0000.raw
+hashpipe_check_status -k RAWFILE -s guppi...0000.raw
 ```
 
-Adding the -I \<instance number\> option, e.g. -I 1 for instance number 1, should set up these keywords in the status buffer of the specified instance number.
+Adding the -I <instance number> option, e.g. -I 1 for instance number 1, should set up these keywords in the status buffer of the specified instance number.
 
 If the user is doing some testing, the readraw_init.sh script can also setup the parameters above with the following command:
 ```
-./readraw\_init.sh cbf INPUTDIR BFRDIR OUTDIR RAWFILE 
+./readraw_init.sh cbf INPUTDIR BFRDIR OUTDIR RAWFILE 
 ```
 
 For example (the additional spaces are to make things clearer for the reader, but are unnecessary in practice):
 ```
-./readraw\_init.sh cbf /mydatag/20220120/0024/Unknown/GUPPI /home/obs/20220120/0024 /mydatag/20220120/0024 guppi...0000.raw
+./readraw_init.sh cbf /mydatag/20220120/0024/Unknown/GUPPI /home/obs/20220120/0024 /mydatag/20220120/0024 guppi...0000.raw
 ```
 
 Or with the hashpipe command (this command is one line, but was separated to make it a little more clear, the "\" character is continuing the command on a new line):
 ```
-hashpipe -p hpguppi\_proc hpguppi\_rawfile\_input\_thread hpguppi\_coherent\_bf\_thread \
+hashpipe -p hpguppi_proc hpguppi_rawfile_input_thread hpguppi_coherent_bf_thread \
 -o INPUTDIR=/mydatag/20220120/0024/Unknown/GUPPI \
 -o BFRDIR=/home/obs/20220120/0024 \
 -o OUTDIR=/mydatag/20220120/0024 \
@@ -180,7 +180,7 @@ Before compiling this code, ensure that the coherent beamformer library has been
 
 The setup for running everything is pretty much the same as it is above except the threads are the ones discussed in this section and rather than cbf, the mode placed in the argument of readraw\_init.sh is ubf as shown below:
 ```
-./readraw\_init.sh ubf
+./readraw_init.sh ubf
 ```
 
 The output is written to filterbank files which for now can be analyzed with plot\_waterfall\_blimpy.py in the post\_processing sub-directory which uses blimpy to generate a waterfall plot. The script is run with the filterbank file as the first argument.
