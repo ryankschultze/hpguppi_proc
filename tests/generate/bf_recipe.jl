@@ -9,14 +9,14 @@ Random.seed!(0)
 dimInfo = DimInfo()
 dimInfo.nants = 8
 dimInfo.npol = 2
-dimInfo.nchan = 64
-dimInfo.nbeams = 4
-dimInfo.ntimes = 0
+dimInfo.nchan = 128
+dimInfo.nbeams = 64
+dimInfo.ntimes = 1024
 
 beamInfo = BeamInfo()
 beamInfo.ras = rand(Float64, (dimInfo.nbeams))
 beamInfo.decs = rand(Float64, (dimInfo.nbeams))
-beamInfo.src_names = collect("X" for b in 1:dimInfo.nbeams)
+beamInfo.src_names = repeat(["X"], dimInfo.nbeams)
 
 calInfo = CalInfo()
 calInfo.refant = "ant00"
@@ -26,14 +26,14 @@ calInfo.cal_G = rand(ComplexF32, (dimInfo.nants, dimInfo.npol))
 calInfo.cal_all = rand(ComplexF32, (dimInfo.nants, dimInfo.npol, dimInfo.nchan))
 
 delayInfo = DelayInfo()
-delayInfo.delays  = rand(Float64, (dimInfo.nants, dimInfo.nbeams, dimInfo.ntimes))
-delayInfo.rates  = rand(Float64, (dimInfo.nants, dimInfo.nbeams, dimInfo.ntimes))
+delayInfo.delays = rand(Float64, (dimInfo.nants, dimInfo.nbeams, dimInfo.ntimes))
+delayInfo.rates = rand(Float64, (dimInfo.nants, dimInfo.nbeams, dimInfo.ntimes))
 delayInfo.time_array = rand(Float64, (dimInfo.ntimes))
 delayInfo.jds = rand(Float64, (dimInfo.ntimes))
 delayInfo.dut1 = 0.0
 
 obsInfo = ObsInfo()
-obsInfo.obsid = "unknown:unknown:YYmmddTHHMMSSZ"
+obsInfo.obsid = "SYNTHETIC"
 obsInfo.freq_array = rand(Float64, (dimInfo.nchan))
 obsInfo.phase_center_ra = beamInfo.ras[1]
 obsInfo.phase_center_dec = beamInfo.decs[1]
@@ -59,4 +59,4 @@ recipe = BeamformerRecipe(
 	delayInfo
 )
 
-to_hdf5("../bf_recipe.h5", recipe)
+to_hdf5("../golden_synthesized_input.bfr5", recipe)
