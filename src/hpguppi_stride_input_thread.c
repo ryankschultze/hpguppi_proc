@@ -30,11 +30,11 @@
 // The multiplication by 2 is for real/inphase and imaginary/quadrature components
 #define Niq    (2)
 #define data_blk_in_idx(p, t, c, a, Np, Nt, Nc)                  (Niq*((p) + (Np)*(t) + (Nt)*(Np)*(c) + (Nc)*(Nt)*(Np)*(a)))
-//#define data_shm_blk_idx(p, t, b, f, a, Np, Nt, Nb, Nf)          ((p) + (Np)*(t) + (Nt)*(Np)*(b) + (Nb)*(Nt)*(Np)*(f) + (Nf)*(Nb)*(Nt)*(Np)*(a))
-//#define data_sim_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
-#define data_shm_blk_idx(p, c, a, t, b, Np, Nc, Na, Nt)          (Niq*((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(b)))
+#define data_shm_blk_idx(p, t, b, a, c, Np, Nt, Nb, Na)          (Niq*((p) + (Np)*(t) + (Nt)*(Np)*(b) + (Nb)*(Nt)*(Np)*(a) + (Na)*(Nb)*(Nt)*(Np)*(c)))
+#define data_sim_in_idx(p, t, w, a, c, Np, Nt, Nw, Na)           (Niq*((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(a) + (Na)*(Nw)*(Nt)*(Np)*(c)))
+//#define data_shm_blk_idx(p, c, a, t, b, Np, Nc, Na, Nt)          (Niq*((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(b)))
 //#define data_sim_in_idx(p, c, a, t, w, Np, Nc, Na, Nt)           (Niq*((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(w)))
-#define data_sim_in_idx(p, c, a, t, Np, Nc, Na)                  (Niq*((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t)))
+//#define data_sim_in_idx(p, c, a, t, Np, Nc, Na)                  (Niq*((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t)))
 #define VERBOSE 0
 #define VERBOSE2 0
 #define TIMING 0
@@ -102,6 +102,7 @@ static void *run(hashpipe_thread_args_t * args)
     long int payload_start = 0;
     int end_of_scan = 0; // End of file flag
     int blocsize;
+    int nblocks = 0;
     int nants = 0;            // Number of antennas stated in RAW file
     int npol = 0;             // Number of polarizations stated in RAW file
     int obsnchan = 0;         // Number of coarse channels X antennas stated in RAW file
@@ -156,35 +157,38 @@ static void *run(hashpipe_thread_args_t * args)
     int n_samp = 0;
     int n_pol = 0;
     int n_sim_ant = 0;
+    int n_win = 0;
     if(sim_flag == 1){
       n_sim_ant = 58;
       if(n_sim_ant <= N_ANT/2){
         n_ant_config = N_ANT/2;
+        n_win = 16;
         // 5 seconds worth of processing at a time
         // 1k mode
         //n_chan = 1; 
-        //n_samp = 2*4096*1024; // 4194304; // 2^22
+        //n_samp = (2*4096*1024)/n_win; // 4194304; // 2^22
         // 4k mode
         n_chan = 4; // 64
-        n_samp = 2*1024*1024; // 1048576; // 2^20
+        n_samp = (2*1024*1024)/n_win; // 1048576; // 2^20
         // 32k mode
         //n_chan = 32;
-        //n_samp = 2*128*1024; // 131072; // 2^17
+        //n_samp = (2*128*1024)/n_win; // 131072; // 2^17
       }else{
         n_ant_config = N_ANT;
+        n_win = 8;
         // 5 seconds worth of processing at a time
         // 1k mode
         //n_chan = 1; 
-        //n_samp = 4096*1024; // 4194304; // 2^22
+        //n_samp = (4096*1024)/n_win; // 4194304; // 2^22
         // 4k mode
         n_chan = 4; // 64
-        n_samp = 1024*1024; // 1048576; // 2^20
+        n_samp = (1024*1024)/n_win; // 1048576; // 2^20
         // 32k mode
         //n_chan = 32;
-        //n_samp = 128*1024; // 131072; // 2^17
+        //n_samp = (128*1024)/n_win; // 131072; // 2^17
       }
       n_pol = 2; 
-      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp); // Generate block of simulated data
+      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win); // Generate block of simulated data
     }
     ssize_t read_blocsize;
 #if TIMING
@@ -195,7 +199,7 @@ static void *run(hashpipe_thread_args_t * args)
     int wait_filename = 0; // Flag to print "waiting for new RAW file name" only once
     int a = 0; // Antenna index
     int c = 0; // Coarse channel index
-    int t = 0; // Time sample index
+    //int t = 0; // Time sample index
     while (run_threads()) {
         hashpipe_status_lock_safe(&st);
         hputs(st.buf, status_key, "waiting");
@@ -332,6 +336,8 @@ static void *run(hashpipe_thread_args_t * args)
 
                     hgeti4(header_buf, "BLOCSIZE", &blocsize);
 
+                    nblocks = raw_file_size/(headersize+blocsize); // Assume this value is always an integer value for now.
+                    printf("STRIDE INPUT: Number of RAW blocks = %d \n", nblocks);
 #if VERBOSE
                     printf("STRIDE INPUT: raw_file_size = %ld \n", raw_file_size);
                     printf("STRIDE INPUT: headersize = %d \n", headersize);
@@ -474,14 +480,14 @@ static void *run(hashpipe_thread_args_t * args)
                                 // Place input data in shared memory buffer (from RAW file or simulated)
                                 if(sim_flag == 0){
                                     // Read the remaining dimensions in the RAW block (npol and n_samp_per_block) and place in the shared memory buffer block
-                                    for(t = 0; t<n_samp_per_block; t++){
-                                        read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,c,a,t,block_count,npol,n_coarse_proc,nants,n_samp_per_block)], Niq*npol);
-                                    }
+                                    //for(t = 0; t<n_samp_per_block; t++){
+                                    read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,0,block_count,a,c,npol,n_samp_per_block,nblocks,nants)], Niq*npol*n_samp_per_block);
+                                    //}
                                 } else{
-                                    // Copy simulated data to shared memory buffer block - data_sim_in_idx(p, c, a, t, Np, Nc, Na)
-                                    for(int t = 0; t<n_samp; t++){
-                                        memcpy(&ptr[data_sim_in_idx(0,c,a,t,n_pol,n_chan,N_ANT)], &sim_data[data_sim_in_idx(0,c,a,t,n_pol,n_chan,N_ANT)], Niq*n_pol);
-                                    }
+                                    // Copy simulated data to shared memory buffer block - data_sim_in_idx(p, t, w, a, c, Np, Nt, Nw, Na)
+                                    //for(int t = 0; t<n_samp; t++){
+                                    memcpy(&ptr[data_sim_in_idx(0,0,0,a,c,n_pol,n_samp,n_win,N_ANT)], &sim_data[data_sim_in_idx(0,0,0,a,c,n_pol,n_samp,n_win,N_ANT)], Niq*n_pol*n_samp*n_win);
+                                    //}
                                 }
                             }
                         }
@@ -555,9 +561,9 @@ static void *run(hashpipe_thread_args_t * args)
                                     lseek(fdin, data_blk_in_idx(0, 0, (c + n_coarse_proc*s), a, npol, n_samp_per_block, n_coarse), SEEK_CUR);
                                     // Place input data in shared memory buffer from RAW file
                                     // Read the remaining dimensions in the RAW block (npol and n_samp_per_block) and place in the shared memory buffer block
-                                    for(int t = 0; t<n_samp_per_block; t++){
-                                        read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,c,a,t,block_count,npol,n_coarse_proc,nants,n_samp_per_block)], Niq*npol);
-                                    }
+                                    //for(int t = 0; t<n_samp_per_block; t++){
+                                    read_blocsize = read(fdin, &ptr[data_shm_blk_idx(0,0,block_count,a,c,npol,n_samp_per_block,nblocks,nants)], Niq*npol*n_samp_per_block);
+                                    //}
                                 }
                             }
 

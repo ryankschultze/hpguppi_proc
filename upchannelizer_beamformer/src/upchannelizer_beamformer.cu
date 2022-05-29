@@ -21,7 +21,7 @@ using namespace std;
 
 // Perform transpose on the data and convert to floats
 __global__
-void data_transpose_ubf(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_ant_config, int n_samp);
+void data_transpose_ubf(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_ant_config, int n_samp, int n_win);
 
 // Perform transpose on the output of the FFT
 __global__
@@ -133,7 +133,7 @@ void set_to_zero_ubf(){
 void set_second_to_zero(){
 	checkCuda_ubf(cudaMemset(d_data_shift, 0, (N_INPUT) * sizeof(cuComplex)/2));
 }
-
+/*
 // Perform transpose on the data and convert to floats
 __global__
 void data_transpose_ubf(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_ant_config, int n_samp) {
@@ -159,7 +159,33 @@ void data_transpose_ubf(signed char* data_in, cuComplex* data_tra, int offset, i
 
 	return;
 }
+*/
+// Perform transpose on the data and convert to floats
+__global__
+void data_transpose_ubf(signed char* data_in, cuComplex* data_tra, int offset, int n_pol, int n_chan, int n_ant, int n_ant_config, int n_samp, int n_win) {
+	int t = threadIdx.x; // Time sample index
+	int a = blockIdx.x;  // Antenna index
+        int w = blockIdx.y;  // Time window index
+	int c = blockIdx.z;  // Coarse channel index
+	int p = 0;           // Polarization index
 
+	int tb = 0; // Index for block of time samples to compensate max number of threads
+	int TS = n_samp/MAX_THREADS; // Number of blocks of time samples to process
+
+	for(p=0; p<n_pol; p++){
+		for(tb = 0; tb < TS; tb++){
+			// If the input data is not float e.g. signed char, just multiply it by '1.0f' to convert it to a float
+			//int h_in = data_in_idx(p, (c + offset), a, t + tb*MAX_THREADS, w, n_pol, n_chan, n_ant, n_samp);
+			int h_in = data_in_idx(p, t + tb*MAX_THREADS, w, a, (c + offset), n_pol, n_samp, n_win, n_ant);
+			int h_tr = data_tr_idx(t + tb*MAX_THREADS, a, p, (c + offset), w, n_samp, n_ant_config, n_pol, n_chan);
+
+			data_tra[h_tr].x = data_in[2*h_in]*1.0f;
+			data_tra[h_tr].y = data_in[2*h_in + 1]*1.0f;
+		}
+	}
+
+	return;
+}
 
 // Perform FFT
 void upchannelize(complex_t* data_tra, int n_ant_config, int n_pol, int n_chan, int n_win, int n_samp){
@@ -175,7 +201,6 @@ void upchannelize(complex_t* data_tra, int n_ant_config, int n_pol, int n_chan, 
 
 	// Setup the cuFFT plan
         checkCufft(cufftPlan1d(&plan, n_samp, CUFFT_C2C, BATCH(n_ant_config,n_pol)));
-	printf("Here cufftPlan \n");
     	// Execute a complex-to-complex 1D FFT
 	// Reduce the amount of memory utilized by cufft by iterating through coarese channels (c) and time windows (w)
 	int h = 0;
@@ -410,7 +435,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	checkCuda_ubf(cudaMemcpy(d_data_in, data_in, 2*n_ant_config*n_pol*nt*n_chan*sizeof(signed char), cudaMemcpyHostToDevice));
 
         // Perform transpose on the data and convert to floats  
-        data_transpose_ubf<<<dimGrid_transpose, dimBlock_transpose>>>(d_data_in, d_data_tra, 0, n_pol, n_chan, n_ant, n_ant_config, n_samp);
+        data_transpose_ubf<<<dimGrid_transpose, dimBlock_transpose>>>(d_data_in, d_data_tra, 0, n_pol, n_chan, n_ant, n_ant_config, n_samp, n_win);
         err_code = cudaGetLastError();
 	if (err_code != cudaSuccess) {
 		printf("FFT: data_transpose() kernel Failed: %s\n", cudaGetErrorString(err_code));
@@ -453,7 +478,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 }
 
 // Generate simulated data
-signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, int nt) {
+signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, int nt, int n_win) {
 	signed char* data_sim;
 	data_sim = (signed char*)calloc(N_INPUT, sizeof(signed char));
 
@@ -481,7 +506,7 @@ signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, 
 			for (int t = 0; t < nt; t++) {
 				for (int a = 0; a < nants; a++) {
 					if(a < n_sim_ant){ 
-						data_sim[2 * data_in_idx(p, 2, a, t, 0, n_pol, n_chan, nants, nt)] = 1;
+						data_sim[2 * data_in_idx(p, t, 0, a, 2, n_pol, nt, n_win, nants)] = 1;
 					}
 				}
 			}
@@ -490,7 +515,7 @@ signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, 
 	if (sim_flag == 2) {
 		for (int p = 0; p < n_pol; p++) {
 			for (int t = 0; t < nt; t++) {
-				data_sim[2 * data_in_idx(p, 2, 2, t, 0, n_pol, n_chan, nants, nt)] = 1;
+				data_sim[2 * data_in_idx(p, t, 0, 2, 2, n_pol, nt, n_win, nants)] = 1;
 			}
 		}
 	}
@@ -500,7 +525,7 @@ signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, 
 			for (int t = (1024*10); t < (nt-(1024*10)); t++) {
 				//data_sim[2 * data_in_idx(p, 0, 2, t, 0, n_pol, n_chan, nants, nt)] = 1;
 				//data_sim[2 * data_in_idx(p, 1, 2, t, 0, n_pol, n_chan, nants, nt)] = 1;
-				data_sim[2 * data_in_idx(p, 2, 2, t, 0, n_pol, n_chan, nants, nt)] = 1;
+				data_sim[2 * data_in_idx(p, t, 0, 2, 2, n_pol, nt, n_win, nants)] = 1;
 				//data_sim[2 * data_in_idx(p, 3, 2, t, 0, n_pol, n_chan, nants, nt)] = 1;
 
 			}
@@ -518,10 +543,10 @@ signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, 
 					if(a < n_sim_ant){
 						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
 						// X polarization
-						data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, nants, nt)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(0, t, 0, a, f, n_pol, nt, n_win, nants)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
 						//data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, nants, nt) + 1] = 0;
 						// Y polarization
-						data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, nants, nt)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(1, t, 0, a, f, n_pol, nt, n_win, nants)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
 						//data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, nants, nt) + 1] = 0;
 					}
 				}
@@ -540,14 +565,13 @@ signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, 
 					if(a < n_sim_ant){
 						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
 						// X polarization
-						data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, nants, nt)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, nants, nt) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(0, t, 0, a, f, n_pol, nt, n_win, nants)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(0, t, 0, a, f, n_pol, nt, n_win, nants) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
 						//data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, nants, nt) + 1] = 0;
 						// Y polarization
-						data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, nants, nt)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, nants, nt) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(1, t, 0, a, f, n_pol, nt, n_win, nants)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(1, t, 0, a, f, n_pol, nt, n_win, nants) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
 						//data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, nants, nt) + 1] = 0;
-
 					}
 				}
 			}
@@ -776,7 +800,7 @@ int main() {
         printf("After init_upchan_beamformer() \n");
 
 	// Generate simulated data
-	signed char* sim_data = simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, nt);
+	signed char* sim_data = simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win);
 
         printf("After simulate_data() \n");
 

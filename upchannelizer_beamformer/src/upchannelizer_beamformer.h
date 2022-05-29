@@ -53,8 +53,8 @@
 // a - antenna index
 // b - beam index
 
-//#define data_in_idx(p, t, w, c, a, Np, Nt, Nw, Nc)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(c) + (Nc)*(Nw)*(Nt)*(Np)*(a))
-#define data_in_idx(p, c, a, t, w, Np, Nc, Na, Nt)           ((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(w))
+#define data_in_idx(p, t, w, a, c, Np, Nt, Nw, Na)           ((p) + (Np)*(t) + (Nt)*(Np)*(w) + (Nw)*(Nt)*(Np)*(a) + (Na)*(Nw)*(Nt)*(Np)*(c))
+//#define data_in_idx(p, c, a, t, w, Np, Nc, Na, Nt)           ((p) + (Np)*(c) + (Nc)*(Np)*(a) + (Na)*(Nc)*(Np)*(t) + (Nt)*(Na)*(Nc)*(Np)*(w))
 #define data_tr_idx(t, a, p, c, w, Nt, Na, Np, Nc)           ((t) + (Nt)*(a) + (Na)*(Nt)*(p) + (Np)*(Na)*(Nt)*(c) + (Nc)*(Np)*(Na)*(Nt)*(w))
 #define data_fft_out_idx(f, a, p, c, w, Nf, Na, Np, Nc)      ((f) + (Nf)*(a) + (Na)*(Nf)*(p) + (Np)*(Na)*(Nf)*(c) + (Nc)*(Np)*(Na)*(Nf)*(w))
 // The "Nf" below is equal in value to "Nt*Nc" that is the dimension of "t" since this is the number of FFT points muliplied by the number of coarse channels
@@ -77,7 +77,7 @@ extern "C" {
 #endif
 void init_upchan_beamformer(); // Allocate memory to all arrays 
 void set_to_zero_ubf(); // Set arrays to zero after a block is processed
-signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, int nt);
+signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, int nt, int n_win);
 float* simulate_coefficients_ubf(int n_sim_ant, int nants, int n_pol, int n_beam, int n_chan);
 float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_ant_config, int n_pol, int n_beam, int actual_n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant);
 //void input_data_pin(signed char * data_in_pin);
