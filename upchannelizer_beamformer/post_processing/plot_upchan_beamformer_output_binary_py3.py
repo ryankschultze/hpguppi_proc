@@ -5,8 +5,8 @@ from array import array
 import numpy as np
 
 # Open binary file containing beamformer output
-#filename = "/datag/users/mruzinda/o/output_d_fft_bf.bin"
-filename = "/home/mruzinda/tmp_output/output_d_fft_bf.bin"
+filename = "/datag/users/mruzinda/o/output_d_fft_bf.bin"
+#filename = "/home/mruzinda/tmp_output/output_d_fft_bf.bin"
 
 # Read file contents: np.fromfile(filename, dtype=float, count=- 1, sep='', offset=0)
 contents_float = np.fromfile(filename, dtype=np.float32)
@@ -15,6 +15,7 @@ print(len(contents_float))
 print(contents_float[0])
 
 # Array dimensions
+# MeerKAT specs
 N_beam = 61 # 64
 N_time = 1 # STI windows
 # 1k mode
@@ -26,6 +27,17 @@ N_fine = (1024*1024)/8 # N_coarse*2^17
 # 32k mode
 #N_coarse = 32
 #N_fine = (128*1024)/8 # N_coarse*2^14
+
+# VLASS specs
+#N_time = 1 # STI windows
+#N_coarse = 1
+# Required
+#N_fine = 128000
+#N_beam = 5 # 64
+# Desired
+#N_fine = 5120000
+#N_fine = 128000
+#N_beam = 31 # 64
 
 N_elements = int(N_time*N_coarse*N_fine*N_beam)
 

@@ -166,6 +166,7 @@ static void *run(hashpipe_thread_args_t * args)
   float time_taken = 0;
   float time_taken_w = 0;
   
+  int telescope_flag = 0;
   uint64_t synctime = 0;
   uint64_t hclocks = 1;
   uint32_t fenchan = 1;
@@ -240,7 +241,7 @@ static void *run(hashpipe_thread_args_t * args)
     //int n_chan = 512; // 32k mode
     int n_pol = 2;
     int n_beam = 1;
-    tmp_coefficients = simulate_coefficients_ubf(n_sim_ant, n_ant_config, n_pol, n_beam, n_chan);
+    tmp_coefficients = simulate_coefficients_ubf(n_sim_ant, n_ant_config, n_pol, n_beam, n_chan, telescope_flag);
     // Register the array in pinned memory to speed HtoD mem copy
     //coeff_pin(tmp_coefficients);
   }
@@ -253,7 +254,7 @@ static void *run(hashpipe_thread_args_t * args)
 
   // Make all initializations before while loop
   // Initialize beamformer (allocate all memory on the device)
-  init_upchan_beamformer();
+  init_upchan_beamformer(telescope_flag);
 
   // Initialize output data array
   float* output_data;
@@ -544,7 +545,7 @@ static void *run(hashpipe_thread_args_t * args)
         time_array_idx = 0;
 
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
-        tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, n_ant_config, (int)npol, (int)nbeams, actual_nbeams,(int)schan, n_coarse_proc, subband_idx, nants);
+        tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, n_ant_config, (int)npol, (int)nbeams, actual_nbeams,(int)schan, n_coarse_proc, subband_idx, nants, telescope_flag);
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
 
         // Get basefilename with no source name
@@ -593,6 +594,8 @@ static void *run(hashpipe_thread_args_t * args)
     hashpipe_status_lock_safe(st);
     hgeti4(st->buf, "NSAMP", &n_samp); 
     hashpipe_status_unlock_safe(st);
+
+    printf("UBF: n_samp = %d\n", n_samp):
 
     // Zero padded if the number of time samples is less than the specification
     // If the number of time samples is greater by 2, then the number of antennas is smaller by half (subarray configuration)
@@ -655,7 +658,7 @@ static void *run(hashpipe_thread_args_t * args)
 
         // Update coefficients with new delay
         // Assign values to tmp variable then copy values from it to pinned memory pointer (bf_coefficients)
-        tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, n_ant_config, (int)npol, (int)nbeams, actual_nbeams, (int)schan, n_coarse_proc, subband_idx, nants);
+        tmp_coefficients = generate_coefficients_ubf(cal_all_data, delays_data, time_array_idx, coarse_chan_freq, n_ant_config, (int)npol, (int)nbeams, actual_nbeams, (int)schan, n_coarse_proc, subband_idx, nants, telescope_flag);
 
         memcpy(bf_coefficients, tmp_coefficients, N_COEFF*sizeof(float));
 
@@ -794,9 +797,9 @@ static void *run(hashpipe_thread_args_t * args)
       clock_gettime(CLOCK_MONOTONIC, &tval_before);
 
       if(sim_flag == 0){
-        output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, bf_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft);
+        output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, bf_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft, telescope_flag);
       }else if(sim_flag == 1){
-        output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, tmp_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft);
+        output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, tmp_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft, telescope_flag);
       }
 
       // Set beamformer output (CUDA kernel before conversion to power), that is summing, to zero before moving on to next block

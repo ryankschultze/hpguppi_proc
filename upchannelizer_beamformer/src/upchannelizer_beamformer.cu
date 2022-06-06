@@ -96,42 +96,75 @@ float* d_coeff = NULL;
 float* h_bf_pow = NULL;
 
 // Allocate memory to all arrays 
-void init_upchan_beamformer() {
+void init_upchan_beamformer(int telescope_flag) {
 	printf("Here In init_upchan_beamformer()! \n");
 
-	// Allocate memory for input data float type
-	checkCuda_ubf(cudaMalloc((void **)&d_data_char, (N_INPUT) * sizeof(signed char)));
-	printf("Here 1st cudaMalloc! \n");
+	if(telescope_flag == 0){
+		// Allocate memory for input data float type
+		checkCuda_ubf(cudaMalloc((void **)&d_data_char, (N_INPUT) * sizeof(signed char)));
+		printf("Here 1st cudaMalloc! \n");
 
-	// Allocate memory for input data cuComplex type
-	checkCuda_ubf(cudaMalloc((void **)&d_data_comp, (N_INPUT) * sizeof(cuComplex) / 2));
-	printf("Here 2nd cudaMalloc! \n");
+		// Allocate memory for input data cuComplex type
+		checkCuda_ubf(cudaMalloc((void **)&d_data_comp, (N_INPUT) * sizeof(cuComplex) / 2));
+		printf("Here 2nd cudaMalloc! \n");
 
-	// Allocate memory for data with FFT shift cuComplex type
-	checkCuda_ubf(cudaMalloc((void **)&d_data_shift, (N_INPUT) * sizeof(cuComplex) / 2));
-	printf("Here 3rd cudaMalloc! \n");
+		// Allocate memory for data with FFT shift cuComplex type
+		checkCuda_ubf(cudaMalloc((void **)&d_data_shift, (N_INPUT) * sizeof(cuComplex) / 2));
+		printf("Here 3rd cudaMalloc! \n");
 
-	// Allocate memory for coefficients float type
-	checkCuda_ubf(cudaMalloc((void **)&d_coeff, N_COEFF * sizeof(float)));
-	printf("Here 4th cudaMalloc! \n");
+		// Allocate memory for coefficients float type
+		checkCuda_ubf(cudaMalloc((void **)&d_coeff, N_COEFF * sizeof(float)));
+		printf("Here 4th cudaMalloc! \n");
 
-	// Allocate memory for output power of coherent beamformer
-        //checkCuda_ubf(cudaMalloc((void **)&d_coh_bf_pow, (N_BF_POW) * sizeof(float)));
-	//printf("Here 5th cudaMalloc! \n");
+		// Allocate memory for output power of coherent beamformer
+	        //checkCuda_ubf(cudaMalloc((void **)&d_coh_bf_pow, (N_BF_POW) * sizeof(float)));
+		//printf("Here 5th cudaMalloc! \n");
 
-	checkCuda_ubf(cudaMallocHost((void **)&h_bf_pow, (N_BF_POW) * sizeof(float)));
+		checkCuda_ubf(cudaMallocHost((void **)&h_bf_pow, (N_BF_POW) * sizeof(float)));
+	}else if(telescope_flag == 1){
+		// Allocate memory for input data float type
+		checkCuda_ubf(cudaMalloc((void **)&d_data_char, (VLASS_N_INPUT) * sizeof(signed char)));
+		printf("Here 1st cudaMalloc! \n");
+
+		// Allocate memory for input data cuComplex type
+		checkCuda_ubf(cudaMalloc((void **)&d_data_comp, (VLASS_N_INPUT) * sizeof(cuComplex) / 2));
+		printf("Here 2nd cudaMalloc! \n");
+
+		// Allocate memory for data with FFT shift cuComplex type
+		checkCuda_ubf(cudaMalloc((void **)&d_data_shift, (VLASS_N_INPUT) * sizeof(cuComplex) / 2));
+		printf("Here 3rd cudaMalloc! \n");
+
+		// Allocate memory for coefficients float type
+		checkCuda_ubf(cudaMalloc((void **)&d_coeff, VLASS_N_COEFF * sizeof(float)));
+		printf("Here 4th cudaMalloc! \n");
+
+		// Allocate memory for output power of coherent beamformer
+	        //checkCuda_ubf(cudaMalloc((void **)&d_coh_bf_pow, (VLASS_N_BF_POW) * sizeof(float)));
+		//printf("Here 5th cudaMalloc! \n");
+
+		checkCuda_ubf(cudaMallocHost((void **)&h_bf_pow, (VLASS_N_BF_POW) * sizeof(float)));
+	}
+
 
 	return;
 }
 
 // Set arrays to zero after a block is processed
-void set_to_zero_ubf(){
-	checkCuda_ubf(cudaMemset(d_data_comp, 0, (N_INPUT) * sizeof(cuComplex)/2));
+void set_to_zero_ubf(int telescope_flag){
+	if(telescope_flag == 0){
+		checkCuda_ubf(cudaMemset(d_data_comp, 0, (N_INPUT) * sizeof(cuComplex)/2));
+	}else if(telescope_flag == 1){
+		checkCuda_ubf(cudaMemset(d_data_comp, 0, (VLASS_N_INPUT) * sizeof(cuComplex)/2));
+	}
 }
 
 // Set arrays to zero after a block is processed
-void set_second_to_zero(){
-	checkCuda_ubf(cudaMemset(d_data_shift, 0, (N_INPUT) * sizeof(cuComplex)/2));
+void set_second_to_zero(int telescope_flag){
+	if(telescope_flag == 0){
+		checkCuda_ubf(cudaMemset(d_data_shift, 0, (N_INPUT) * sizeof(cuComplex)/2));
+	}else if(telescope_flag == 1){
+		checkCuda_ubf(cudaMemset(d_data_shift, 0, (VLASS_N_INPUT) * sizeof(cuComplex)/2));
+	}
 }
 /*
 // Perform transpose on the data and convert to floats
@@ -309,12 +342,11 @@ void beamformer_power_sti_ubf(cuComplex* bf_volt, float* bf_power, int offset, i
 	int b = blockIdx.z;  // Beam index
 	int s = 0;           // STI window index
 	int h = 0;
+	int xp = 0; // X polarization
+	int yp = 0; // Y polarization
 
 	int n_freq_streams = n_coarse/N_STREAMS;
 	
-	int xp = coh_bf_idx(0, b, f, (c + offset), t, n_pol, n_beam, n_coarse, n_fine); // X polarization
-	int yp = coh_bf_idx(1, b, f, (c + offset), t, n_pol, n_beam, n_coarse, n_fine); // Y polarization
-        
 	float x_pol_pow; // XX*
 	float y_pol_pow; // YY*
 	float beam_power;
@@ -323,6 +355,8 @@ void beamformer_power_sti_ubf(cuComplex* bf_volt, float* bf_power, int offset, i
 	__shared__ float reduced_array[N_STI_BLOC];
 
 	for(s = 0; s<n_sti; s++){
+		xp = coh_bf_idx(0, b, f, (c + offset), (s*n_time_int + t), n_pol, n_beam, n_coarse, n_fine); // X polarization
+		yp = coh_bf_idx(1, b, f, (c + offset), (s*n_time_int + t), n_pol, n_beam, n_coarse, n_fine); // Y polarization
 		h = pow_bf_idx(f, (c + offset), s, b, n_fine, n_coarse, n_sti);
 		if(c < n_freq_streams){	
 			if(n_pol == 1){
@@ -385,7 +419,7 @@ void beamformer_power_sti_ubf(cuComplex* bf_volt, float* bf_power, int offset, i
 }
 
 // Run upchannelizer and beamformer
-float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_ant, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp) {
+float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, int n_pol, int n_ant, int n_beam, int n_chan, int n_win, int n_time_int, int n_samp, int telescope_flag) {
 
 	cudaError_t err_code;
 
@@ -428,7 +462,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	float* data_out = h_bf_pow;
 
 	// Copy beamformer coefficients from host to device
-	checkCuda_ubf(cudaMemcpy(d_coefficient, h_coefficient, (N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ) * sizeof(float), cudaMemcpyHostToDevice));
+	checkCuda_ubf(cudaMemcpy(d_coefficient, h_coefficient, (2*n_pol*n_ant_config*n_beam*n_chan) * sizeof(float), cudaMemcpyHostToDevice));
 
 	//printf("Before cudaMemcpy(HtoD) coefficients! \n");
 	// Copy input data from host to device
@@ -452,7 +486,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	}
 
 	// Set input of FFT shift to zero so it can be used as the output of the coherent_beamformer
-	set_to_zero_ubf();
+	set_to_zero_ubf(telescope_flag);
 
 	// Coherent beamformer
 	coherent_beamformer_ubf<<<dimGrid_coh_bf, dimBlock_coh_bf>>>(d_data_tra2, d_coefficient, d_data_tra, 0, n_ant_config, n_pol, n_samp, n_chan, n_beam, n_win);
@@ -462,7 +496,7 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 	}
 
 	// Set input of coherent_beamformer_ubf() to zero so it can be used as the output of the beamformer_power_sti_ubf() kernel
-	set_second_to_zero();
+	set_second_to_zero(telescope_flag);
 
 	// Short time integration after beamforming
 	beamformer_power_sti_ubf<<<dimGrid_bf_pow, dimBlock_bf_pow>>>(d_data_tra, (float*)d_data_tra2, 0, n_pol, n_beam, n_chan, n_samp, n_time_int, n_sti);
@@ -478,9 +512,19 @@ float* run_upchannelizer_beamformer(signed char* data_in, float* h_coefficient, 
 }
 
 // Generate simulated data
-signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, int nt, int n_win) {
+signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, int nt, int n_win, int telescope_flag) {
+	int n_input = 0;
+	int n_ant_config = 0;
+	if(telescope_flag == 0){
+		n_input = N_INPUT;
+		n_ant_config = N_ANT;
+	}else if(telescope_flag == 1){
+		n_input = VLASS_N_INPUT;
+		n_ant_config = N_ANT/2;
+	}
+
 	signed char* data_sim;
-	data_sim = (signed char*)calloc(N_INPUT, sizeof(signed char));
+	data_sim = (signed char*)calloc(n_input, sizeof(signed char));
 
 	/*
 	'sim_flag' is a flag that indicates the kind of data that is simulated.
@@ -493,8 +537,8 @@ signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, 
 	*/
 	int sim_flag = 5;
 	if (sim_flag == 0) {
-		for (int i = 0; i < (N_INPUT / 2); i++) {
-			if(i < ((n_sim_ant*N_INPUT)/(2*N_ANT))){
+		for (int i = 0; i < (n_input / 2); i++) {
+			if(i < ((n_sim_ant*n_input)/(2*n_ant_config))){
 				data_sim[2 * i] = 1;
 			}else{
 				data_sim[2 * i] = 0;
@@ -581,9 +625,19 @@ signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, 
 }
 
 // Generate simulated weights or coefficients
-float* simulate_coefficients_ubf(int n_sim_ant, int nants, int n_pol, int n_beam, int n_chan) {
+float* simulate_coefficients_ubf(int n_sim_ant, int nants, int n_pol, int n_beam, int n_chan, int telescope_flag) {
+	int n_coeff = 0;
+	int n_ant_config = 0;
+	if(telescope_flag == 0){
+		n_coeff = N_COEFF;
+		n_ant_config = N_ANT;
+	}else if(telescope_flag == 1){
+		n_coeff = VLASS_N_COEFF;
+		n_ant_config = N_ANT/2;
+	}
+
 	float* coeff_sim;
-	coeff_sim = (float*)calloc(N_COEFF, sizeof(float));
+	coeff_sim = (float*)calloc(n_coeff, sizeof(float));
 	/*
 	'sim_flag' is a flag that indicates the kind of data that is simulated.
 	sim_flag = 0 -> Ones
@@ -594,7 +648,7 @@ float* simulate_coefficients_ubf(int n_sim_ant, int nants, int n_pol, int n_beam
 	*/
 	int sim_flag = 4;
 	if (sim_flag == 0) {
-		for (int i = 0; i < (((N_COEFF*n_pol*n_beam*n_chan)/(N_POL*N_BEAM*MAX_COARSE_FREQ)) / 2); i++) {
+		for (int i = 0; i < ((2*n_pol*n_ant_config*n_beam*n_chan) / 2); i++) {
 			coeff_sim[2*i] = 1;
 			//coeff_sim[2*i + 1] = 1;
 		}
@@ -678,9 +732,16 @@ float* simulate_coefficients_ubf(int n_sim_ant, int nants, int n_pol, int n_beam
 }
 
 // Generate coefficients with delays and phase up solutions from HDF5 file
-float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_ant_config, int n_pol, int n_beam, int actual_n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant) {
+float* generate_coefficients_ubf(complex_t* phase_up, double* delay, int n, double* coarse_chan, int n_ant_config, int n_pol, int n_beam, int actual_n_beam, int schan, int n_coarse, int subband_idx, uint64_t n_real_ant, int telescope_flag) {
+	int n_coeff = 0;
+	if(telescope_flag == 0){
+		n_coeff = N_COEFF;
+	}else if(telescope_flag == 1){
+		n_coeff = VLASS_N_COEFF;
+	}
+
 	float* coefficients;
-	coefficients = (float*)calloc(N_COEFF, sizeof(float));
+	coefficients = (float*)calloc(n_coeff, sizeof(float));
 	double tau = 0;
         int fc = 0; // First frequency channel in the RAW file and on this node
 
@@ -751,61 +812,99 @@ int main() {
 	// To run in regular array configuration, enter values between 33 and 64 in n_beam and n_ant
 	// To run in subarray configuration, enter values 32 or less (and greater than 1 otherwise, beamforming can't be done)
 	// ---------------------------- //
-	int n_beam = 61;
-        int n_pol = 2;
-	int n_sim_ant = 58;
+	int n_beam = 0;
+        int n_pol = 0;
+	int n_sim_ant = 0;
 	int n_ant_config = 0;
 	int n_chan = 0;
 	int nt = 0;
         int n_win = 0;
 	int n_time_int = 0;
-	if(n_sim_ant <= N_ANT/2){ // Subarray configuration
-		n_ant_config = N_ANT/2;
-		// 5 seconds worth of processing at a time
-		// 1k mode
-		//n_chan = 1; 
-	        //nt = 2*4096*1024; // 4194304; // 2^22
-		// 4k mode
-	    	n_chan = 4; // 64
-	        nt = 2*1024*1024; // 1048576; // 2^20
-		// 32k mode
-		//n_chan = 32;
-		//nt = 2*128*1024; // 131072; // 2^17
+	int n_input = 0;
 
-		n_win = 16;
-		n_time_int = 16;
-	}else{ // Regular array configuration
-		n_ant_config = N_ANT;
-		// 5 seconds worth of processing at a time
-		// 1k mode
-		//n_chan = 1; 
-	        //nt = 4096*1024; // 4194304; // 2^22
-		// 4k mode
-		n_chan = 4; // 64
-	        nt = 1024*1024; // 1048576; // 2^20
-		// 32k mode
-		//n_chan = 32;
-		//nt = 128*1024; // 131072; // 2^17
+	int telescope_flag = 0;
+	int spec_flag = 0;
+        // ---------------- MeerKAT specs --------------- //
+	if(telescope_flag == 0){
+		n_input = N_INPUT;
+		n_beam = 61;
+		n_pol = 2;
+		n_sim_ant = 58;
+		if(n_sim_ant <= N_ANT/2){ // Subarray configuration
+			n_ant_config = N_ANT/2;
+			// 5 seconds worth of processing at a time
+			// 1k mode
+			//n_chan = 1; 
+		        //nt = 2*4096*1024; // 4194304; // 2^22
+			// 4k mode
+		    	n_chan = 4; // 64
+		        nt = 2*1024*1024; // 1048576; // 2^20
+			// 32k mode
+			//n_chan = 32;
+			//nt = 2*128*1024; // 131072; // 2^17
 
-		n_win = 8;
-		n_time_int = 8;
+			n_win = 16;
+			n_time_int = 16;
+		}else{ // Regular array configuration
+			n_ant_config = N_ANT;
+			// 5 seconds worth of processing at a time
+			// 1k mode
+			//n_chan = 1; 
+		        //nt = 4096*1024; // 4194304; // 2^22
+			// 4k mode
+			n_chan = 4; // 64
+		        nt = 1024*1024; // 1048576; // 2^20
+			// 32k mode
+			//n_chan = 32;
+			//nt = 128*1024; // 131072; // 2^17
+
+			n_win = 8;
+			n_time_int = 8;
+		}
 	}
+	// -----------------------------------------------//
+	// ------------------ VLASS specs ----------------//
+	else if(telescope_flag == 1){
+		n_input = VLASS_N_INPUT;
+                // Required Specification
+		if(spec_flag == 0){
+			n_beam = 5;
+			n_pol = 2;
+			n_sim_ant = 27;
+			n_ant_config = N_ANT/2;
+			n_chan = 1;
+			nt = 5120000;
+			n_win = 40;
+			n_time_int = 40;
+		}// Desired Specification
+		else if(spec_flag == 1){
+			n_beam = 31;
+			n_pol = 2;
+			n_sim_ant = 27;
+			n_ant_config = N_ANT/2;
+			n_chan = 1;
+			nt = 10240000; // 5120000
+			n_win = 80;
+			n_time_int = 80;
+		}
+	}
+	// -----------------------------------------------//
 
         int n_samp = nt/n_win;
 	int n_sti = n_win/n_time_int;
 
 	// Allocate memory to all arrays used by run_FFT() 
-	init_upchan_beamformer();
+	init_upchan_beamformer(telescope_flag);
 
         printf("After init_upchan_beamformer() \n");
 
 	// Generate simulated data
-	signed char* sim_data = simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win);
+	signed char* sim_data = simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win, telescope_flag);
 
         printf("After simulate_data() \n");
 
 	// Generate simulated weights or coefficients
-	float* sim_coefficients = simulate_coefficients_ubf(n_sim_ant, n_ant_config, n_pol, n_beam, n_chan);
+	float* sim_coefficients = simulate_coefficients_ubf(n_sim_ant, n_ant_config, n_pol, n_beam, n_chan, telescope_flag);
 
 	printf("After simulate_coefficients() \n");
 
@@ -832,7 +931,7 @@ int main() {
 
 		printf("Here4!\n");
 
-		fwrite(input_test, sizeof(float), N_INPUT, input_file);
+		fwrite(input_test, sizeof(float), n_input, input_file);
 
 		printf("Here5!\n");
 
@@ -850,7 +949,7 @@ int main() {
 
 	float time_taken = 0;
 	float bf_time = 0;
-	int num_runs = 1;
+	int num_runs = 10;
 
 	// Start timing FFT computation //
 	struct timespec tval_before, tval_after;
@@ -863,7 +962,7 @@ int main() {
                 // Things to keep in mind about FFT output:
 		// - FFT shift possibly required after FFT if too much memory is allocated
 		// - Output may need to be divided number of FFT points
-                output_data = run_upchannelizer_beamformer(sim_data, sim_coefficients, n_pol, n_sim_ant, n_beam, n_chan, n_win, n_time_int, n_samp);
+                output_data = run_upchannelizer_beamformer(sim_data, sim_coefficients, n_pol, n_sim_ant, n_beam, n_chan, n_win, n_time_int, n_samp, telescope_flag);
 
 		// Stop timing FFT computation //
 		clock_gettime(CLOCK_MONOTONIC, &tval_after);
@@ -880,9 +979,9 @@ int main() {
 
 	printf("Here8!\n");
 
-	//strcpy(output_filename, "/datag/users/mruzinda/o/output_d_fft_bf.bin");
+	strcpy(output_filename, "/datag/users/mruzinda/o/output_d_fft_bf.bin");
 	//strcpy(output_filename, "/mydatag/Unknown/GUPPI/output_d_fft_bf.bin");
-	strcpy(output_filename, "/home/mruzinda/tmp_output/output_d_fft_bf.bin");
+	//strcpy(output_filename, "/home/mruzinda/tmp_output/output_d_fft_bf.bin");
 
 	printf("Here9!\n");
 

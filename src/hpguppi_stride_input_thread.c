@@ -117,6 +117,7 @@ static void *run(hashpipe_thread_args_t * args)
     int64_t prev_pktidx;
     int64_t zero_blk_pktidx;
     int n_missed_blks = 0;
+    int telescope_flag = 0;
     char *zero_blk;
     zero_blk = (char*)calloc(N_INPUT, sizeof(char));
     char *ptr;
@@ -188,7 +189,7 @@ static void *run(hashpipe_thread_args_t * args)
         //n_samp = (128*1024)/n_win; // 131072; // 2^17
       }
       n_pol = 2; 
-      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win); // Generate block of simulated data
+      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win, telescope_flag); // Generate block of simulated data
     }
     ssize_t read_blocsize;
 #if TIMING
