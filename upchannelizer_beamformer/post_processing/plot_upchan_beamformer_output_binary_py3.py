@@ -16,28 +16,32 @@ print(contents_float[0])
 
 # Array dimensions
 # MeerKAT specs
-N_beam = 61 # 64
-N_time = 1 # STI windows
+#N_beam = 61 # 64
+#N_time = 1 # STI windows
 # 1k mode
 #N_coarse = 1
 #N_fine = (4096*1024)/8 # N_coarse*2^19
 # 4k mode
-N_coarse = 4 # 4
-N_fine = (1024*1024)/8 # N_coarse*2^17 
+#N_coarse = 4 # 4
+#N_fine = (1024*1024)/8 # N_coarse*2^17 
 # 32k mode
 #N_coarse = 32
 #N_fine = (128*1024)/8 # N_coarse*2^14
 
 # VLASS specs
-#N_time = 1 # STI windows
-#N_coarse = 1
+N_coarse = 1
 # Required
+#N_time = 40 # STI windows
 #N_fine = 128000
 #N_beam = 5 # 64
 # Desired
+#N_time = 2 # STI windows
 #N_fine = 5120000
+#N_time = 80 # STI windows
 #N_fine = 128000
-#N_beam = 31 # 64
+N_time = 10000 # STI windows
+N_fine = 1024
+N_beam = 31 # 64
 
 N_elements = int(N_time*N_coarse*N_fine*N_beam)
 
@@ -54,7 +58,7 @@ if N_time > 1:
     # "interpolation ='none'" removes interpolation which was there by default. 
     # I'm only removing it for the sake of accurate analysis and diagnosis.
     #plt.imshow(contents_array[0:N_time,0:N_fine,beam_idx], extent=[1, N_fine, 1, N_time], aspect='auto', interpolation='bicubic')
-    plt.imshow(contents_array[beam_idx,0:N_time,0:int(N_coarse*N_fine)], extent=[1, int(N_coarse*N_fine), 1, N_time], aspect='auto', interpolation='none')
+    plt.imshow(contents_array[beam_idx,0:N_time,0:int(N_coarse*N_fine)], extent=[0, int(N_coarse*N_fine), 0, N_time], aspect='auto', interpolation='none')
     plt.title('Waterfall (Frequency vs. time)')
     plt.ylabel('Time samples')
     plt.xlabel('Frequency bins')
@@ -114,7 +118,7 @@ if N_time > 1:
     axs[0, 1].set_title('Beam 2')
     axs[1, 0].plot(contents_array[2,0:N_time,freq_idx], 'tab:green')
     axs[1, 0].set_title('Beam 3')
-    axs[1, 1].plot(contents_array[33,0:N_time,freq_idx], 'tab:red')
+    axs[1, 1].plot(contents_array[3,0:N_time,freq_idx], 'tab:red')
     axs[1, 1].set_title('Beam 33')
 
     # set the spacing between subplots

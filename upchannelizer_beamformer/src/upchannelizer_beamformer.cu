@@ -603,22 +603,24 @@ signed char* simulate_data_ubf(int n_sim_ant, int nants, int n_pol, int n_chan, 
                 float tmp_max = 1.0;
 		float tmp_min = -1.0;
 
+		for (int w = 0; w < n_win; w++) {
 		for (int t = 0; t < nt; t++) {
 			for (int f = 0; f < n_chan; f++) {
 				for (int a = 0; a < nants; a++) {
 					if(a < n_sim_ant){
 						// Requantize from doubles/floats to signed chars with a range from -128 to 127 
 						// X polarization
-						data_sim[2 * data_in_idx(0, t, 0, a, f, n_pol, nt, n_win, nants)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						data_sim[2 * data_in_idx(0, t, 0, a, f, n_pol, nt, n_win, nants) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(0, t, w, a, f, n_pol, nt, n_win, nants)] = (signed char)((((cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(0, t, w, a, f, n_pol, nt, n_win, nants) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
 						//data_sim[2 * data_in_idx(0, f, a, t, 0, n_pol, n_chan, nants, nt) + 1] = 0;
 						// Y polarization
-						data_sim[2 * data_in_idx(1, t, 0, a, f, n_pol, nt, n_win, nants)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
-						data_sim[2 * data_in_idx(1, t, 0, a, f, n_pol, nt, n_win, nants) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(1, t, w, a, f, n_pol, nt, n_win, nants)] = (signed char)((((2*cos(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
+						data_sim[2 * data_in_idx(1, t, w, a, f, n_pol, nt, n_win, nants) + 1] = (signed char)((((sin(2 * PI * freq * t*0.000001) - tmp_min)/(tmp_max-tmp_min)) - 0.5)*256);
 						//data_sim[2 * data_in_idx(1, f, a, t, 0, n_pol, n_chan, nants, nt) + 1] = 0;
 					}
 				}
 			}
+		}
 		}
 	}
 	return data_sim;
@@ -646,9 +648,9 @@ float* simulate_coefficients_ubf(int n_sim_ant, int nants, int n_pol, int n_beam
 	sim flag = 3 -> Simulated beams from 58 to 122 degrees. Assuming a ULA.
         sim_flag = 4 -> One value at one polarization, one element, one beam, and one frequency bin
 	*/
-	int sim_flag = 4;
+	int sim_flag = 0;
 	if (sim_flag == 0) {
-		for (int i = 0; i < ((2*n_pol*n_ant_config*n_beam*n_chan) / 2); i++) {
+		for (int i = 0; i < (n_pol*n_ant_config*n_beam*n_chan); i++) {
 			coeff_sim[2*i] = 1;
 			//coeff_sim[2*i + 1] = 1;
 		}
@@ -803,7 +805,7 @@ float* data_test(signed char *sim_data){
 }
 
 //Comment out main() function when compiling for hpguppi
-/*// <----Uncomment here if testing standalone code
+// <----Uncomment here if testing standalone code
 // Test all of the kernels and functions, and write the output to
 // a text file for analysis
 int main() {
@@ -875,7 +877,7 @@ int main() {
 			n_chan = 1;
 			nt = 5120000;
 			n_win = 40;
-			n_time_int = 40;
+			n_time_int = 1;
 		}// Desired Specification
 		else if(spec_flag == 1){
 			n_beam = 31;
@@ -884,8 +886,8 @@ int main() {
 			n_ant_config = N_ANT/2;
 			n_chan = 1;
 			nt = 10240000; // 5120000
-			n_win = 80;
-			n_time_int = 80;
+			n_win = 10000;
+			n_time_int = 1;
 		}
 	}
 	// -----------------------------------------------//
@@ -1015,4 +1017,4 @@ int main() {
 
 	return 0;
 }
-*/// <----Uncomment here if testing standalone code
+// <----Uncomment here if testing standalone code
