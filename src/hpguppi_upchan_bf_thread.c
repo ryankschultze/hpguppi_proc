@@ -595,7 +595,7 @@ static void *run(hashpipe_thread_args_t * args)
     hgeti4(st->buf, "NSAMP", &n_samp); 
     hashpipe_status_unlock_safe(st);
 
-    printf("UBF: n_samp = %d\n", n_samp):
+    printf("UBF: n_samp = %d\n", n_samp);
 
     // Zero padded if the number of time samples is less than the specification
     // If the number of time samples is greater by 2, then the number of antennas is smaller by half (subarray configuration)

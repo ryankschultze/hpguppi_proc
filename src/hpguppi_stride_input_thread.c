@@ -610,7 +610,7 @@ static void *run(hashpipe_thread_args_t * args)
                         filenum=0;
 
                         sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
-                        printf("STRIDE INPUT: Opening first raw file '%s' of scan for subband = %d of %d \n", fname, s, n_subband);
+                        printf("STRIDE INPUT: Opening first raw file '%s' of scan for subband = %d of %d \n", fname, (s+1), n_subband);
                         fdin = open(fname, open_flags, 0644);
 
                         // Get raw file size in order to calculate the number of blocks in the file
