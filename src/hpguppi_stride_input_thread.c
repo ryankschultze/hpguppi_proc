@@ -655,6 +655,7 @@ static void *run(hashpipe_thread_args_t * args)
                         // End of scan so move on to the next subband
                         end_of_scan = 1;
                     }
+
                     // Reset block_count to 0 (the index of blocks in the RAW files of a subband)
                     block_count=0;
 
@@ -664,6 +665,9 @@ static void *run(hashpipe_thread_args_t * args)
 
                     // Setup for next block
                     block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
+
+                    // Wait to allow the processing thread to open and read bfr5 file, and open and write to filterbank files
+                    sleep(2);
                 }// Sometimes there might be headers with no data blocks remaining in the RAW file. So copy zero blocks to buffer blocks with the appropriate header
                 else if((cur_pos+(blocsize+headersize)) > raw_file_size){
                     // If we haven't reached the last header, then increment block_count (the index of blocks in the RAW files of a subband)
@@ -813,6 +817,8 @@ static void *run(hashpipe_thread_args_t * args)
                     // Setup for next block
                     block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
 
+                    // Wait to allow the beamformer to open and read bfr5 file, and open and write to filterbank files
+                    sleep(2);
                 }
                 // Will exit if thread has been cancelled
                 pthread_testcancel();
