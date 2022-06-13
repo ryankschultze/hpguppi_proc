@@ -739,8 +739,8 @@ static void *run(hashpipe_thread_args_t * args)
         hashpipe_info(thread_name, "Opening fil file '%s'", fname);
 
                 
-        //fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_TRUNC, 0644);
-        fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_APPEND, 0644);
+        fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_TRUNC, 0644);
+        //fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_APPEND, 0644);
         if(fdraw[b] == -1) {
 	  // If we can't open this output file, we probably won't be able to
           // open any more output files, so print message and bail out.
