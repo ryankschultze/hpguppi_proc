@@ -414,7 +414,7 @@ static void *run(hashpipe_thread_args_t * args)
         // Set specified path to read from HDF5 files
         strcpy(hdf5_basefilename, bfrdir);
         strcat(hdf5_basefilename, "/");
-        strcat(hdf5_basefilename, raw_basefilename);
+        strcat(hdf5_basefilename, raw_obsid);
         strcat(hdf5_basefilename, ".bfr5");
 
         // Read HDF5 file and get all necessary parameters (obsid, cal_all, delays, rates, time_array, ras, decs)
