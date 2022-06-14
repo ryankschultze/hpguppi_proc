@@ -188,8 +188,9 @@ static void *run(hashpipe_thread_args_t * args)
         //n_chan = 32;
         //n_samp = (128*1024)/n_win; // 131072; // 2^17
       }
+      int sim_flag = 5;
       n_pol = 2; 
-      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win, telescope_flag); // Generate block of simulated data
+      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win, sim_flag, telescope_flag); // Generate block of simulated data
     }
     ssize_t read_blocsize;
 #if TIMING

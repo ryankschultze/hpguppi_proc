@@ -241,7 +241,8 @@ static void *run(hashpipe_thread_args_t * args)
     //int n_chan = 512; // 32k mode
     int n_pol = 2;
     int n_beam = 1;
-    tmp_coefficients = simulate_coefficients_ubf(n_sim_ant, n_ant_config, n_pol, n_beam, n_chan, telescope_flag);
+    int sim_flag = 0;
+    tmp_coefficients = simulate_coefficients_ubf(n_sim_ant, n_ant_config, n_pol, n_beam, n_chan, sim_flag, telescope_flag);
     // Register the array in pinned memory to speed HtoD mem copy
     //coeff_pin(tmp_coefficients);
   }

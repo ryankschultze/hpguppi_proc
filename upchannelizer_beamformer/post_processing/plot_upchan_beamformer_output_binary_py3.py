@@ -16,20 +16,20 @@ print(contents_float[0])
 
 # Array dimensions
 # MeerKAT specs
-#N_beam = 61 # 64
-#N_time = 1 # STI windows
+N_beam = 61 # 64
+N_time = 1 # STI windows
 # 1k mode
 #N_coarse = 1
 #N_fine = (4096*1024)/8 # N_coarse*2^19
 # 4k mode
-#N_coarse = 4 # 4
-#N_fine = (1024*1024)/8 # N_coarse*2^17 
+N_coarse = 4 # 4
+N_fine = (1024*1024)/8 # N_coarse*2^17 
 # 32k mode
 #N_coarse = 32
 #N_fine = (128*1024)/8 # N_coarse*2^14
 
 # VLASS specs
-N_coarse = 1
+#N_coarse = 1
 # Required
 #N_time = 40 # STI windows
 #N_fine = 128000
@@ -39,9 +39,9 @@ N_coarse = 1
 #N_fine = 5120000
 #N_time = 80 # STI windows
 #N_fine = 128000
-N_time = 10000 # STI windows
-N_fine = 1024
-N_beam = 31 # 64
+#N_time = 10000 # STI windows
+#N_fine = 1024
+#N_beam = 31 # 64
 
 N_elements = int(N_time*N_coarse*N_fine*N_beam)
 
