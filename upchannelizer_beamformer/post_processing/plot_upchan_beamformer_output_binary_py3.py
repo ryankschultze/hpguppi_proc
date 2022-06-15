@@ -3,9 +3,14 @@
 import matplotlib.pyplot as plt
 from array import array
 import numpy as np
+import sys
+
+# Number of arguments
+num_args = len(sys.argv)
 
 # Open binary file containing beamformer output
-filename = "/datag/users/mruzinda/o/output_d_fft_bf.bin"
+filename = sys.argv[1]
+#filename = "/datag/users/mruzinda/o/output_d_fft_bf.bin"
 #filename = "/home/mruzinda/tmp_output/output_d_fft_bf.bin"
 
 # Read file contents: np.fromfile(filename, dtype=float, count=- 1, sep='', offset=0)
@@ -13,35 +18,51 @@ contents_float = np.fromfile(filename, dtype=np.float32)
 
 print(len(contents_float))
 print(contents_float[0])
+print(sys.argv[2])
 
+telescope_flag = sys.argv[2]
+mode_flag = sys.argv[3]
 # Array dimensions
 # MeerKAT specs
-N_beam = 61 # 64
-N_time = 1 # STI windows
-# 1k mode
-#N_coarse = 1
-#N_fine = (4096*1024)/8 # N_coarse*2^19
-# 4k mode
-N_coarse = 4 # 4
-N_fine = (1024*1024)/8 # N_coarse*2^17 
-# 32k mode
-#N_coarse = 32
-#N_fine = (128*1024)/8 # N_coarse*2^14
+if telescope_flag == "MK":
+    N_beam = 61 # 64
+    N_time = 1 # STI windows
+    # 1k mode
+    if mode_flag == "1k":
+        N_coarse = 1
+        N_fine = (4096*1024)/8 # N_coarse*2^19
+    # 4k mode
+    if mode_flag == "4k":
+        N_coarse = 4 # 4
+        N_fine = (1024*1024)/8 # N_coarse*2^17 
+    # 32k mode
+    if mode_flag == "32k":
+        N_coarse = 32
+        N_fine = (128*1024)/8 # N_coarse*2^14
 
 # VLASS specs
-#N_coarse = 1
-# Required
-#N_time = 40 # STI windows
-#N_fine = 128000
-#N_beam = 5 # 64
-# Desired
-#N_time = 2 # STI windows
-#N_fine = 5120000
-#N_time = 80 # STI windows
-#N_fine = 128000
-#N_time = 10000 # STI windows
-#N_fine = 1024
-#N_beam = 31 # 64
+# Number of points of the FFT
+if num_args == 5:
+    fft_flag = sys.argv[4]
+if telescope_flag == "VLA":
+    N_coarse = 1
+    # Required
+    if mode_flag == "req":
+        N_time = 40 # STI windows
+        N_fine = 128000
+        N_beam = 5 # 64
+    # Desired
+    if mode_flag == "des":
+        N_beam = 31 # 64
+        if fft_flag == "5120000":
+            N_time = 2 # STI windows
+            N_fine = 5120000
+        if fft_flag == "128000":
+            N_time = 80 # STI windows
+            N_fine = 128000
+        if fft_flag == "1024":
+            N_time = 10000 # STI windows
+            N_fine = 1024
 
 N_elements = int(N_time*N_coarse*N_fine*N_beam)
 

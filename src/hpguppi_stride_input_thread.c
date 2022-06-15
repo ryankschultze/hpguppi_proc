@@ -101,6 +101,7 @@ static void *run(hashpipe_thread_args_t * args)
     long int cur_pos = 0;
     long int payload_start = 0;
     int end_of_scan = 0; // End of file flag
+    int bfr5fid = 0;
     int blocsize;
     int nblocks = 0;
     int nants = 0;            // Number of antennas stated in RAW file
@@ -252,10 +253,17 @@ static void *run(hashpipe_thread_args_t * args)
             // Iterate through blocks until the end of a sequence of RAW files
             // -------------------------------------------------------------- //
             while(!end_of_scan){
+                // Check keyword in status memory to see whether bfr5 file exists
+                // If it doesn't exist, set fdin equal to -1 and wait for new RAW file name (new scan)
+                hgeti4(st.buf, "BFR5FID", &bfr5fid);
+
                 // -------------------------------------------------------------- //
                 // Read raw files
                 // -------------------------------------------------------------- //
-                if (fdin == -1) { //no file opened
+                if ((fdin == -1) || (bfr5fid == -1)) { //no file opened
+                    // Ensure the block_count and subband index are reinitialized if a scan has been skipped
+                    block_count = 0;
+                    s = 0;
                     // If there is no file ready at the beginning of processing then wait for it to be written to the buffer.
                     while(strlen(cur_fname) == 0){
                         hashpipe_status_lock_safe(&st);
@@ -283,6 +291,14 @@ static void *run(hashpipe_thread_args_t * args)
                     // Now create the basefilename
                     // If a '...0000.raw' file exists, that is different from the previous '...0000.raw' file
                     if (strcmp(prev_fname, cur_fname) != 0){
+                        // If a new scan has started as a result of skipping due to a missing bfr5 file,
+                        // reset the keyword in shared memory so the process can start over for the new scan
+                        bfr5fid = 0;
+                        hashpipe_status_lock_safe(&st);
+                        hputi4(st.buf, "BFR5FID", bfr5fid);
+                        hashpipe_status_unlock_safe(&st);
+
+                        printf("STRIDE INPUT: RAW file name is currently: %s \n", cur_fname); // Let the user know the current RAW file name
                         strcpy(prev_fname, cur_fname); // Save this file name for comparison on the next iteration
 
                         base_pos = strchr(cur_fname, '.'); // Finds the first occurence of a period in the filename
@@ -314,6 +330,24 @@ static void *run(hashpipe_thread_args_t * args)
                         if(wait_filename == 0){ // Print "waiting for new RAW file name" only once
                             wait_filename = 1;
                             printf("STRIDE INPUT: Waiting for new RAW file name! \n");
+                        }
+
+                        // Get RAW file name in the status buffer 
+                        hashpipe_status_lock_safe(&st);
+                        hgets(st.buf, "RAWFILE", sizeof(cur_fname), cur_fname);
+                        hashpipe_status_unlock_safe(&st);
+
+                        // Assume the input directory may have changed 
+                        hashpipe_status_lock_safe(&st);
+                        hgets(st.buf, "INPUTDIR", sizeof(indir), indir); // Don't have a name for this keyword yet, just going with 'INPUTDIR' for now
+                        hashpipe_status_unlock_safe(&st);
+                        // Ensure there's a slash at the end of the path
+                        if((strlen(indir) != 0) && (indir[(strlen(indir)-1)] != '/')){
+                            strcat(indir, "/");
+                        }
+                        if(strlen(indir) != 0){
+                            strcat(indir, cur_fname); // Concatenate the directory and filename
+                            strcpy(cur_fname, indir); // Use cur_fname as the current file name variable moving forward
                         }
 
                         // Will exit if thread has been cancelled

@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 		}
 		sim_coef_flag = 4;
 	}// If the output file and simulated flags are entered
-	else if(argc == 4){
+	else if(argc >= 4){
 		sim_data_flag = atoi(argv[2]);
 		sim_coef_flag = atoi(argv[3]);
 		if(sim_data_flag < 0 || sim_data_flag > 5){

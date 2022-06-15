@@ -149,6 +149,8 @@ static void *run(hashpipe_thread_args_t * args)
   char prev_basefilename[200];
   strcpy(prev_basefilename, "prev_basefilename"); // Initialize as different string that raw_basefilename
   char raw_obsid[200];
+  int bfr5fid = 0;
+  int skip_scan = 0;
   
   // Filterbank file header initialization
   fb_hdr_t fb_hdr;
@@ -319,7 +321,7 @@ static void *run(hashpipe_thread_args_t * args)
         free(dec_data);
         dec_data = NULL;
         status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
-        // Mark as free
+        // Mark dummy block as free
         hpguppi_input_databuf_set_free(db, curblock);
         // Go to next block
         curblock = (curblock + 1) % db->header.n_block;
@@ -343,7 +345,7 @@ static void *run(hashpipe_thread_args_t * args)
         pktstart, pktstop, pktidx);
         // Inform status buffer of processing status
         hashpipe_status_lock_safe(st);
-        hgets(st->buf, "PROCSTAT", sizeof("END"), "END"); // Inform status buffer that the scan processing has ended
+        hputs(st->buf, "PROCSTAT", "END"); // Inform status buffer that the scan processing has ended
         hashpipe_status_unlock_safe(st);
       }
       continue;
@@ -412,11 +414,35 @@ static void *run(hashpipe_thread_args_t * args)
         hgets(st->buf, "BFRDIR", sizeof(bfrdir), bfrdir);
         hashpipe_status_unlock_safe(st);
 
+        // Replace colons in raw_obsid with hyphens since OBSID is being used as bfr5 file name
+        for(int i = 0; i<strlen(raw_obsid); i++){
+          if(raw_obsid[i] == ':'){
+            raw_obsid[i] = '-';
+          }
+        }
+
         // Set specified path to read from HDF5 files
         strcpy(hdf5_basefilename, bfrdir);
         strcat(hdf5_basefilename, "/");
         strcat(hdf5_basefilename, raw_obsid);
         strcat(hdf5_basefilename, ".bfr5");
+
+        // Check to see that bfr5 file exists
+        // If it does, move on, but if it doesn't, set keyword to -1 in shared memory buffer and go to end of scan
+        // Essentially skip this scan because there is no bfr5 file
+        if(access(hdf5_basefilename, F_OK) == -1){
+          if(skip_scan == 0){
+            printf("UBF: %s file does not exist! Skipping this scan! \n", hdf5_basefilename);
+            skip_scan = 1;
+          }
+          bfr5fid = -1;
+          hashpipe_status_lock_safe(st);
+          hputi4(st->buf, "BFR5FID", bfr5fid);
+          hashpipe_status_unlock_safe(st);
+          continue;
+        }
+        skip_scan = 0;
+        bfr5fid = 0;
 
         // Read HDF5 file and get all necessary parameters (obsid, cal_all, delays, rates, time_array, ras, decs)
         // Open an existing file. //
