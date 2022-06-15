@@ -348,6 +348,9 @@ static void *run(hashpipe_thread_args_t * args)
         hputs(st->buf, "PROCSTAT", "END"); // Inform status buffer that the scan processing has ended
         hashpipe_status_unlock_safe(st);
       }
+      // Will exit if thread has been cancelled
+      pthread_testcancel();
+
       continue;
     }
     // Reset rec_stop flag to notify the user of the end of a scan
@@ -355,7 +358,7 @@ static void *run(hashpipe_thread_args_t * args)
 
     // Inform status buffer of processing status
     hashpipe_status_lock_safe(st);
-    hgets(st->buf, "PROCSTAT", sizeof("START"), "START"); // Inform status buffer that the scan processing has started
+    hputs(st->buf, "PROCSTAT", "START"); // Inform status buffer that the scan processing has started
     hashpipe_status_unlock_safe(st);
 
     // Get values for calculations at varying points in processing
@@ -386,6 +389,18 @@ static void *run(hashpipe_thread_args_t * args)
       n_ant_config = N_ANT/2;
     }else{
       n_ant_config = N_ANT;
+    }
+
+    // Check to see whether the input thread has moved on to the next scan
+    // The BFR5FID key is set to 0 in the input thread when the scan has moved on i.e. RAW file name has changed
+    hashpipe_status_lock_safe(st);
+    hgeti4(st->buf, "BFR5FID", &bfr5fid);
+    hashpipe_status_unlock_safe(st);
+    if(bfr5fid == -1){
+      // Will exit if thread has been cancelled
+      pthread_testcancel();
+
+      continue;
     }
 
     // Get the appropriate basefile name from the stride_input_thread 
