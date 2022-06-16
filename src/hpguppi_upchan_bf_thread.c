@@ -322,10 +322,6 @@ static void *run(hashpipe_thread_args_t * args)
         free(dec_data);
         dec_data = NULL;
         status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
-        // Mark dummy block as free
-        hpguppi_input_databuf_set_free(db, curblock);
-        // Go to next block
-        curblock = (curblock + 1) % db->header.n_block;
       }
       for(int b = 0; b < nbeams; b++){
         // If file open, close it
@@ -350,9 +346,14 @@ static void *run(hashpipe_thread_args_t * args)
         hputs(st->buf, "PROCSTAT", "END"); // Inform status buffer that the scan processing has ended
         hashpipe_status_unlock_safe(st);
       }
+
+      // Mark dummy block as free
+      hpguppi_input_databuf_set_free(db, curblock);
+      // Go to next block
+      curblock = (curblock + 1) % db->header.n_block;
+
       // Will exit if thread has been cancelled
       pthread_testcancel();
-
       continue;
     }
     // Reset rec_stop flag to notify the user of the end of a scan
