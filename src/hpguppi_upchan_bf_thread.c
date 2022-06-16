@@ -290,7 +290,8 @@ static void *run(hashpipe_thread_args_t * args)
     
     // Get subband index
     hashpipe_status_lock_safe(st);
-    hgeti4(st->buf, "SUBBAND", &subband_idx); // Get current index of subband being processed
+    //hgeti4(st->buf, "SUBBAND", &subband_idx); // Get current index of subband being processed
+    hgeti4(ptr, "SUBBAND", &subband_idx); // Get current index of subband being processed
     hashpipe_status_unlock_safe(st);
 
     // Read param struct for this block
@@ -307,10 +308,11 @@ static void *run(hashpipe_thread_args_t * args)
     hgeti8(ptr, "PKTSTART", &pktstart);
     hgeti8(ptr, "PKTSTOP", &pktstop);
 
-    if((pktidx >= pktstop) && (subband_idx == (n_subband-1) || subband_idx == 0)){
+    //if((pktidx >= pktstop) && (subband_idx == (n_subband-1) || subband_idx == 0)){
+    if(pktidx >= pktstop){
       coeff_flag = 0;
       // Possibly free memory here so it can be reallocated at the beginning of a scan to compensate for a change in size
-      if(cal_all_data != NULL){
+      if((cal_all_data != NULL) && (subband_idx == (n_subband-1))){
         free(cal_all_data);
         cal_all_data = NULL;
         free(delays_data);
@@ -859,7 +861,7 @@ static void *run(hashpipe_thread_args_t * args)
       time_taken = time_taken + (float)(tval_after.tv_nsec - tval_before.tv_nsec)*1e-9; // Time in nanoseconds since 'tv_sec - start and end'
       bf_time = time_taken;
 
-      printf("UBF: run_beamformer() plus set_to_zero() time: %f s\n", bf_time);
+      printf("UBF: Subband index: %d, run_beamformer() time: %f s\n", subband_idx, bf_time);
 
       // Start timing write
       struct timespec tval_before_w, tval_after_w;

@@ -89,7 +89,7 @@ static void *run(hashpipe_thread_args_t * args)
     // -------------------------------------------------------------- //
     // Reinitialize subband index to 0
     // -------------------------------------------------------------- //
-    hputi4(st.buf, "SUBBAND", 0);
+    //hputi4(st.buf, "SUBBAND", 0);
 
     // -------------------------------------------------------------- //
     // Variables and pointers used in main loop
@@ -242,7 +242,7 @@ static void *run(hashpipe_thread_args_t * args)
             // -------------------------------------------------------------- //
             // Write index of subband to status buffer
             // -------------------------------------------------------------- //
-            hputi4(st.buf, "SUBBAND", s);
+            //hputi4(st.buf, "SUBBAND", s);
 
             // -------------------------------------------------------------- //
             // At the beginning of a file so set end_of_scan == 0
@@ -434,6 +434,8 @@ static void *run(hashpipe_thread_args_t * args)
                         hputs(st.buf, status_key, "receiving");
                         memcpy(header, &header_buf, headersize);
                         hashpipe_status_unlock_safe(&st);
+
+                        hputi4(header, "SUBBAND", s);
 
                         directio = hpguppi_read_directio_mode(header);
 
