@@ -305,6 +305,7 @@ static void *run(hashpipe_thread_args_t * args)
                         period_pos = base_pos-cur_fname;
 
                         memcpy(basefilename, cur_fname, period_pos); // Copy base filename portion of file name to tmp_basefilename variable
+                        basefilename[period_pos] = '\0';
 
                         // Get basefilename with no path and place in status buffer
                         // strrchr() finds the last occurence of the specified character

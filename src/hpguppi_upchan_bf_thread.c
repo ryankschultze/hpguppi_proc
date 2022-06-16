@@ -208,6 +208,7 @@ static void *run(hashpipe_thread_args_t * args)
   int actual_nbeams = 0;
   uint64_t npol;
   hvl_t *src_names_str;
+  char *p_end;
   int hdf5_obsidsize;
 
   int time_array_idx = 0; // time_array index
@@ -494,7 +495,7 @@ static void *run(hashpipe_thread_args_t * args)
         // Read the dataset. //
         status = H5Dread(src_id, native_src_type, H5S_ALL, H5S_ALL, H5P_DEFAULT, src_names_str);
         for(int i=0; i<src_elements; i++) {
-          printf("%d: len: %d, str is: %s\n", i, (int)src_names_str[i].len, (char *)src_names_str[i].p);
+          printf("%d: len: %d, str is: %.*s\n", i, (int)src_names_str[i].len, (int)src_names_str[i].len, (char *)src_names_str[i].p);
         }
 
         // Close the dataset //
@@ -755,7 +756,9 @@ static void *run(hashpipe_thread_args_t * args)
             strcpy(fb_basefilename, outdir);
             strcat(fb_basefilename, "/");
             strcat(fb_basefilename, base_no_src);
-            strcat(fb_basefilename, (char *)src_names_str[b].p);
+	    p_end = fb_basefilename + strlen(fb_basefilename) + src_names_str[b].len;
+            strncat(fb_basefilename, (char *)src_names_str[b].p, src_names_str[b].len);
+	    *p_end = '\0';
 
             if(subband_idx >= 0 && subband_idx < 10) {
               sprintf(fname, "%s.SB0%d.B0%d.fil",  fb_basefilename, subband_idx, b);
@@ -770,7 +773,9 @@ static void *run(hashpipe_thread_args_t * args)
           strcpy(fb_basefilename, outdir);
           strcat(fb_basefilename, "/");
           strcat(fb_basefilename, base_no_src);
-          strcat(fb_basefilename, (char *)src_names_str[b].p);
+	  p_end = fb_basefilename + strlen(fb_basefilename) + src_names_str[b].len;
+          strncat(fb_basefilename, (char *)src_names_str[b].p, src_names_str[b].len);
+	  *p_end = '\0';
 
           if(subband_idx >= 0 && subband_idx < 10) {
             sprintf(fname, "%s.SB0%d.B%d.fil",  fb_basefilename, subband_idx, b);
@@ -819,8 +824,8 @@ static void *run(hashpipe_thread_args_t * args)
         if(sim_flag == 0){
           fb_hdr.src_raj = ra_data[b];
           fb_hdr.src_dej = dec_data[b];
-          strncpy(fb_hdr.source_name, (char *)src_names_str[b].p, 80);
-          fb_hdr.source_name[80] = '\0';
+          strncpy(fb_hdr.source_name, (char *)src_names_str[b].p, src_names_str[b].len);
+          fb_hdr.source_name[src_names_str[b].len] = '\0';
         }
         fb_fd_write_header(fdraw[b], &fb_hdr);
       }
