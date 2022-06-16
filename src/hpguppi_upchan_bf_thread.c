@@ -331,6 +331,7 @@ static void *run(hashpipe_thread_args_t * args)
         // If file open, close it
         if(fdraw[b] != -1) {
           // Close file
+          hashpipe_info(thread_name, "Closing fil file for beam %d", b);
           close(fdraw[b]);
           // Reset fdraw, got_packet_0, filenum, block_count
           fdraw[b] = -1;
