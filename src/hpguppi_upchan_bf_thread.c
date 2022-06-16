@@ -125,7 +125,7 @@ static void *run(hashpipe_thread_args_t * args)
   int curblock=0;
   int block_count=0; //filenum=0;
   int got_packet_0=0, first=1;
-  char *ptr;
+  char *p_header;
   int rv = 0;
   double obsbw;
   double tbin;
@@ -287,26 +287,24 @@ static void *run(hashpipe_thread_args_t * args)
     // Wait for buf to have data
     rv = hpguppi_input_databuf_wait_filled(db, curblock);
     if(rv!=0)continue;
-    
+    // Get pointer to current block's header
+    p_header = hpguppi_databuf_header(db, curblock);
+
     // Get subband index
-    hashpipe_status_lock_safe(st);
-    //hgeti4(st->buf, "SUBBAND", &subband_idx); // Get current index of subband being processed
-    hgeti4(ptr, "SUBBAND", &subband_idx); // Get current index of subband being processed
-    hashpipe_status_unlock_safe(st);
+    hgeti4(p_header, "SUBBAND", &subband_idx); // Get current index of subband being processed
 
     // Read param struct for this block
-    ptr = hpguppi_databuf_header(db, curblock);
     if (first) {
-      hpguppi_read_obs_params(ptr, &gp, &pf);
+      hpguppi_read_obs_params(p_header, &gp, &pf);
       first = 0;
     } else {
-      hpguppi_read_subint_params(ptr, &gp, &pf);
+      hpguppi_read_subint_params(p_header, &gp, &pf);
     }
-    
+
     // Read pktidx, pktstart, pktstop from header
-    hgeti8(ptr, "PKTIDX", &pktidx);
-    hgeti8(ptr, "PKTSTART", &pktstart);
-    hgeti8(ptr, "PKTSTOP", &pktstop);
+    hgeti8(p_header, "PKTIDX", &pktidx);
+    hgeti8(p_header, "PKTSTART", &pktstart);
+    hgeti8(p_header, "PKTSTOP", &pktstop);
 
     //if((pktidx >= pktstop) && (subband_idx == (n_subband-1) || subband_idx == 0)){
     if(pktidx >= pktstop){
@@ -366,23 +364,23 @@ static void *run(hashpipe_thread_args_t * args)
     hashpipe_status_unlock_safe(st);
 
     // Get values for calculations at varying points in processing
-    hgetu8(ptr, "SYNCTIME", &synctime);
-    hgetu8(ptr, "HCLOCKS", &hclocks);
-    hgetu4(ptr, "FENCHAN", &fenchan);
-    hgetr8(ptr, "CHAN_BW", &chan_bw); // In MHz
-    hgetr8(ptr, "OBSFREQ", &obsfreq);
-    hgetu8(ptr, "NANTS", &nants);
-    hgetu8(ptr, "OBSNCHAN", &obsnchan);
-    hgetu4(ptr, "SCHAN", &schan);
-    hgetu8(ptr, "PIPERBLK", &piperblk);
-    hgetu8(ptr, "STT_SMJD", &stt_smjd);
-    hgetu8(ptr, "STT_IMJD", &stt_imjd);
-    hgetr8(ptr,"TBIN", &tbin);
-    hgets(ptr, "OBSID", sizeof(raw_obsid), raw_obsid);
-    hgets(ptr, "SRC_NAME", sizeof(src_name), src_name);
-    hgetr8(ptr, "OBSBW", &obsbw);
-    hgetu8(ptr, "BLOCSIZE", &raw_blocsize); // Raw file block size
-    
+    hgetu8(p_header, "SYNCTIME", &synctime);
+    hgetu8(p_header, "HCLOCKS", &hclocks);
+    hgetu4(p_header, "FENCHAN", &fenchan);
+    hgetr8(p_header, "CHAN_BW", &chan_bw); // In MHz
+    hgetr8(p_header, "OBSFREQ", &obsfreq);
+    hgetu8(p_header, "NANTS", &nants);
+    hgetu8(p_header, "OBSNCHAN", &obsnchan);
+    hgetu4(p_header, "SCHAN", &schan);
+    hgetu8(p_header, "PIPERBLK", &piperblk);
+    hgetu8(p_header, "STT_SMJD", &stt_smjd);
+    hgetu8(p_header, "STT_IMJD", &stt_imjd);
+    hgetr8(p_header,"TBIN", &tbin);
+    hgets(p_header, "OBSID", sizeof(raw_obsid), raw_obsid);
+    hgets(p_header, "SRC_NAME", sizeof(src_name), src_name);
+    hgetr8(p_header, "OBSBW", &obsbw);
+    hgetu8(p_header, "BLOCSIZE", &raw_blocsize); // Raw file block size
+
     hashpipe_status_lock_safe(st);
     hgets(st->buf, "BASEFILE", sizeof(raw_basefilename), raw_basefilename);
     hgets(st->buf, "OUTDIR", sizeof(outdir), outdir);
@@ -748,7 +746,7 @@ static void *run(hashpipe_thread_args_t * args)
 
       // Update filterbank headers based on raw params, Nts, and BFR5 params etc.
       // Technically unnecessary for now, but I might move all of the filterbank header info below to this function so leaving it here for now
-      update_fb_hdrs_from_raw_hdr_ubf(fb_hdr, ptr);
+      update_fb_hdrs_from_raw_hdr_ubf(fb_hdr, p_header);
 
       // Open nbeams filterbank files to save a beam per file i.e. N_BIN*n_fft*sizeof(float) per file.
       //printf("UBF: Opening filterbank files \n");
