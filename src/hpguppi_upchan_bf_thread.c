@@ -322,6 +322,8 @@ static void *run(hashpipe_thread_args_t * args)
         free(dec_data);
         dec_data = NULL;
         status = H5Dvlen_reclaim(native_src_type, src_dspace_id, H5P_DEFAULT, src_names_str);
+        // Reset block_count only at the end of the entire scan
+        block_count=0;
       }
       for(int b = 0; b < nbeams; b++){
         // If file open, close it
@@ -333,7 +335,6 @@ static void *run(hashpipe_thread_args_t * args)
           fdraw[b] = -1;
         }
       }
-      block_count=0;
       // Print end of recording conditions only once
       if(rec_stop == 0){
         rec_stop = 1;
