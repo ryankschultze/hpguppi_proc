@@ -221,7 +221,7 @@ static void *run(hashpipe_thread_args_t * args)
             // -------------------------------------------------------------- //
             // Write index of subband to status buffer
             // -------------------------------------------------------------- //
-            //hputi4(st.buf, "SUBBAND", s);
+            hputi4(st.buf, "SUBBAND", s);
 
             // -------------------------------------------------------------- //
             // At the beginning of a file so set end_of_scan == 0
