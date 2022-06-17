@@ -124,7 +124,7 @@ static void *run(hashpipe_thread_args_t * args)
   int blocksize=0; // Size of beamformer output (output block size)
   int curblock=0;
   int block_count=0; //filenum=0;
-  int got_packet_0=0, first=1;
+  int first=1;
   char *p_header;
   int rv = 0;
   double obsbw;
@@ -329,11 +329,10 @@ static void *run(hashpipe_thread_args_t * args)
           // Close file
           hashpipe_info(thread_name, "Closing fil file for beam %d", b);
           close(fdraw[b]);
-          // Reset fdraw, got_packet_0, filenum, block_count
+          // Reset fdraw, filenum, block_count
           fdraw[b] = -1;
         }
       }
-      got_packet_0 = 0;
       block_count=0;
       // Print end of recording conditions only once
       if(rec_stop == 0){
@@ -400,14 +399,19 @@ static void *run(hashpipe_thread_args_t * args)
     hgeti4(st->buf, "BFR5FID", &bfr5fid);
     hashpipe_status_unlock_safe(st);
     if(bfr5fid == -1){
+      // Mark block as free
+      hpguppi_input_databuf_set_free(db, curblock);
+      // Go to next block
+      curblock = (curblock + 1) % db->header.n_block;
+
       // Will exit if thread has been cancelled
       pthread_testcancel();
-
       continue;
     }
 
     // Get the appropriate basefile name from the stride_input_thread 
     // Get HDF5 file data at the beginning of the processing
+    // This if statement also only does processing per subband (so only the first block of the subband)
     if(strcmp(prev_basefilename, raw_basefilename) != 0 || subband_idx != prev_subband_idx){
       strcpy(prev_basefilename, raw_basefilename);
       prev_subband_idx = subband_idx;
@@ -426,6 +430,46 @@ static void *run(hashpipe_thread_args_t * args)
         // Equivalent equation //
         //coarse_chan_freq[i] = ((i + subband_idx*n_coarse_proc)-(n_chan_per_node/2))*(chan_bw*1e-3) + (obsfreq*1e-3) + ((chan_bw/2)*1e-3);
       }
+
+      // Number of FFT points depending on mode
+      if(n_coarse_proc == 1){        // 1k mode
+        n_fft = 524288; // 2^19 point FFT
+      }else if(n_coarse_proc == 4){  // 4k mode
+        n_fft = 131072; // 2^17 point FFT
+      }else if(n_coarse_proc == 32){ // 32k mode
+        n_fft = 16384;  // 2^14 point FFT
+      }
+      n_samp_spec = n_fft*n_win_spec;
+
+      // Acquire these values each block because the number of time samples could vary
+      // Number of time samples in a RAW file
+      hashpipe_status_lock_safe(st);
+      hgeti4(st->buf, "NSAMP", &n_samp); 
+      hashpipe_status_unlock_safe(st);
+
+      printf("UBF: n_samp = %d\n", n_samp);
+
+      // Zero padded if the number of time samples is less than the specification
+      // If the number of time samples is greater by 2, then the number of antennas is smaller by half (subarray configuration)
+      // So there is a situation where one of the RAW files may have less time samples than 2 times the 
+      // specified value here in the subarray configuration. Try to compensate for that with the else if()
+      if(n_samp < n_samp_spec){
+        n_samp = n_samp_spec;
+      }else if(n_samp > (3*n_samp_spec/2) && n_samp < 2*n_samp_spec){
+        n_samp = 2*n_samp_spec;
+      }
+
+      // Number of time samples used for FFT (Number of FFT points)
+      n_time_int = n_samp/n_fft;
+
+      // Number of spectra windows
+      n_win = n_time_int;
+
+      // Number of STI windows 
+      n_sti = n_win/n_time_int;
+
+      // Size of beamformer output
+      blocksize= n_coarse_proc*n_fft*n_sti*sizeof(float); 
 
       if((sim_flag == 0) && (block_count == 0)){
         hashpipe_status_lock_safe(st);
@@ -457,6 +501,14 @@ static void *run(hashpipe_thread_args_t * args)
           hashpipe_status_lock_safe(st);
           hputi4(st->buf, "BFR5FID", bfr5fid);
           hashpipe_status_unlock_safe(st);
+
+          // Mark block as free
+          hpguppi_input_databuf_set_free(db, curblock);
+          // Go to next block
+          curblock = (curblock + 1) % db->header.n_block;
+
+          // Will exit if thread has been cancelled
+          pthread_testcancel();
           continue;
         }
         skip_scan = 0;
@@ -610,16 +662,6 @@ static void *run(hashpipe_thread_args_t * args)
         // Get file name with no source name
         memcpy(base_no_src, &base_src[0], last_underscore_pos+1);
         base_no_src[last_underscore_pos+1] = '\0';
-
-        // Number of FFT points depending on mode
-        if(n_coarse_proc == 1){        // 1k mode
-          n_fft = 524288; // 2^19 point FFT
-        }else if(n_coarse_proc == 4){  // 4k mode
-          n_fft = 131072; // 2^17 point FFT
-        }else if(n_coarse_proc == 32){ // 32k mode
-          n_fft = 16384;  // 2^14 point FFT
-        }
-        n_samp_spec = n_fft*n_win_spec;
       }
 
       if(sim_flag == 1){
@@ -631,10 +673,88 @@ static void *run(hashpipe_thread_args_t * args)
         strcat(fb_basefilename, raw_basefilename);
       }
 
-      // If this is a new scan, write headers and so on to new filterbank files
-      got_packet_0 = 0;
+      // Create the output directory if needed
+      strncpy(datadir, fb_basefilename, 1023);
+      last_slash = strrchr(datadir, '/');
+      if (last_slash!=NULL && last_slash!=datadir) {
+	*last_slash = '\0';
+	hashpipe_info(thread_name,
+	  "Using directory '%s' for output", datadir);
+        if(mkdir_p(datadir, 0755) == -1) {
+	  hashpipe_error(thread_name, "mkdir_p(%s)", datadir);
+          pthread_exit(NULL);
+        }
+      }
+
+      // Update filterbank headers based on raw params, Nts, and BFR5 params etc.
+      // Technically unnecessary for now, but I might move all of the filterbank header info below to this function so leaving it here for now
+      update_fb_hdrs_from_raw_hdr_ubf(fb_hdr, p_header);
+
+      // Open nbeams filterbank files to save a beam per file i.e. N_BIN*n_fft*sizeof(float) per file.
+      //printf("UBF: Opening filterbank files \n");
+      for(int b = 0; b < nbeams; b++){
+        if(sim_flag == 0){
+          // Set specified path to write filterbank files
+          strcpy(fb_basefilename, outdir);
+          strcat(fb_basefilename, "/");
+          strcat(fb_basefilename, base_no_src);
+	  p_end = fb_basefilename + strlen(fb_basefilename) + src_names_str[b].len;
+          strncat(fb_basefilename, (char *)src_names_str[b].p, src_names_str[b].len);
+	  *p_end = '\0';
+
+          sprintf(fname, "%s.SB%02d.B%02d.fil",  fb_basefilename, subband_idx, b);
+        }else if(sim_flag == 1){
+          sprintf(fname, "%s.B0.fil",  fb_basefilename);
+        }
+        hashpipe_info(thread_name, "Opening fil file '%s'", fname);
+
+                
+        fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_TRUNC, 0644);
+        //fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_APPEND, 0644);
+        if(fdraw[b] == -1) {
+	  // If we can't open this output file, we probably won't be able to
+          // open any more output files, so print message and bail out.
+          hashpipe_error(thread_name,
+	    "cannot open filterbank output file, giving up");
+            pthread_exit(NULL);
+        }
+    	posix_fadvise(fdraw[b], 0, 0, POSIX_FADV_DONTNEED);
+      }
+
+      // Get center frequency depending on mode (1k, 4k or 32k)
+      if(n_coarse_proc == 1){
+        center_freq = coarse_chan_freq[0]*1e3;
+      }else{
+        half_n_coarse_proc = (n_coarse_proc/2);
+        center_freq = ((coarse_chan_freq[half_n_coarse_proc-1]+coarse_chan_freq[half_n_coarse_proc])/2)*1e3;
+      }
+
+      // Filterbank header values for now
+      fb_hdr.telescope_id = 64; // MeerKAT ID (Don't know why it's 64, maybe associated with the number of antennas)
+      fb_hdr.foff = chan_bw/n_fft; // Filterbank channel bandwidth in MHz
+      fb_hdr.nchans = n_coarse_proc*n_fft; // Number of channels in a filterbank file
+      fb_hdr.fch1 = center_freq; // Center frequency in MHz
+      fb_hdr.tsamp = tbin*n_fft*n_time_int; // Time interval between output samples
+      fb_hdr.tstart = stt_imjd + stt_smjd/86400.0; // tstart for now
+      // Write RAW filename to filterbank header
+      sprintf(raw_filename, "%s.0000.raw",  raw_basefilename);
+      strncpy(fb_hdr.rawdatafile, raw_filename, 80);
+      fb_hdr.rawdatafile[80] = '\0';
+
+      // Write filterbank header to output file
+      for(int b = 0; b < nbeams; b++){
+        fb_hdr.ibeam =  b;
+        if(sim_flag == 0){
+          fb_hdr.src_raj = ra_data[b];
+          fb_hdr.src_dej = dec_data[b];
+          strncpy(fb_hdr.source_name, (char *)src_names_str[b].p, src_names_str[b].len);
+          fb_hdr.source_name[src_names_str[b].len] = '\0';
+        }
+        fb_fd_write_header(fdraw[b], &fb_hdr);
+      }
     }
 
+    // Acquire these values each block because the number of time samples could vary
     // Number of time samples in a RAW file
     hashpipe_status_lock_safe(st);
     hgeti4(st->buf, "NSAMP", &n_samp); 
@@ -723,173 +843,62 @@ static void *run(hashpipe_thread_args_t * args)
       }
     }
 
-    /* Set up data ptr for quant routines */
+    /* Set up data pointer for quant routines */
     pf.sub.data = (unsigned char *)hpguppi_databuf_data(db, curblock);
 
-    // Wait for packet 0 before starting write
-    // "packet 0" is the first packet/block of the new recording,
-    // it is not necessarily pktidx == 0.
-    if ((got_packet_0==0 && gp.stt_valid==1)) {
-      got_packet_0 = 1;
+    // Note writing status
+    hashpipe_status_lock_safe(st);
+    hputs(st->buf, status_key, "writing");
+    hashpipe_status_unlock_safe(st);
 
-      // Create the output directory if needed
-      strncpy(datadir, fb_basefilename, 1023);
-      last_slash = strrchr(datadir, '/');
-      if (last_slash!=NULL && last_slash!=datadir) {
-	*last_slash = '\0';
-	hashpipe_info(thread_name,
-	  "Using directory '%s' for output", datadir);
-        if(mkdir_p(datadir, 0755) == -1) {
-	  hashpipe_error(thread_name, "mkdir_p(%s)", datadir);
-          pthread_exit(NULL);
-        }
-      }
+    // Start timing beamforming computation
+    struct timespec tval_before, tval_after;
+    clock_gettime(CLOCK_MONOTONIC, &tval_before);
 
-      // Update filterbank headers based on raw params, Nts, and BFR5 params etc.
-      // Technically unnecessary for now, but I might move all of the filterbank header info below to this function so leaving it here for now
-      update_fb_hdrs_from_raw_hdr_ubf(fb_hdr, p_header);
-
-      // Open nbeams filterbank files to save a beam per file i.e. N_BIN*n_fft*sizeof(float) per file.
-      //printf("UBF: Opening filterbank files \n");
-      for(int b = 0; b < nbeams; b++){
-        if(b >= 0 && b < 10) {
-          if(sim_flag == 0){
-            // Set specified path to write filterbank files
-            strcpy(fb_basefilename, outdir);
-            strcat(fb_basefilename, "/");
-            strcat(fb_basefilename, base_no_src);
-	    p_end = fb_basefilename + strlen(fb_basefilename) + src_names_str[b].len;
-            strncat(fb_basefilename, (char *)src_names_str[b].p, src_names_str[b].len);
-	    *p_end = '\0';
-
-            if(subband_idx >= 0 && subband_idx < 10) {
-              sprintf(fname, "%s.SB0%d.B0%d.fil",  fb_basefilename, subband_idx, b);
-            }else{
-              sprintf(fname, "%s.SB%d.B0%d.fil",  fb_basefilename, subband_idx, b);
-            }
-          }else if(sim_flag == 1){
-            sprintf(fname, "%s.B0.fil",  fb_basefilename);
-          }
-        }else{
-          // Set specified path to write filterbank files
-          strcpy(fb_basefilename, outdir);
-          strcat(fb_basefilename, "/");
-          strcat(fb_basefilename, base_no_src);
-	  p_end = fb_basefilename + strlen(fb_basefilename) + src_names_str[b].len;
-          strncat(fb_basefilename, (char *)src_names_str[b].p, src_names_str[b].len);
-	  *p_end = '\0';
-
-          if(subband_idx >= 0 && subband_idx < 10) {
-            sprintf(fname, "%s.SB0%d.B%d.fil",  fb_basefilename, subband_idx, b);
-          }else{
-            sprintf(fname, "%s.SB%d.B%d.fil",  fb_basefilename, subband_idx, b);
-          }
-        }
-        hashpipe_info(thread_name, "Opening fil file '%s'", fname);
-
-                
-        fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_TRUNC, 0644);
-        //fdraw[b] = open(fname, O_CREAT|O_WRONLY|O_APPEND, 0644);
-        if(fdraw[b] == -1) {
-	  // If we can't open this output file, we probably won't be able to
-          // open any more output files, so print message and bail out.
-          hashpipe_error(thread_name,
-	    "cannot open filterbank output file, giving up");
-            pthread_exit(NULL);
-        }
-    	posix_fadvise(fdraw[b], 0, 0, POSIX_FADV_DONTNEED);
-      }
-
-      // Get center frequency depending on mode (1k, 4k or 32k)
-      if(n_coarse_proc == 1){
-        center_freq = coarse_chan_freq[0]*1e3;
-      }else{
-        half_n_coarse_proc = (n_coarse_proc/2);
-        center_freq = ((coarse_chan_freq[half_n_coarse_proc-1]+coarse_chan_freq[half_n_coarse_proc])/2)*1e3;
-      }
-
-      // Filterbank header values for now
-      fb_hdr.telescope_id = 64; // MeerKAT ID (Don't know why it's 64, maybe associated with the number of antennas)
-      fb_hdr.foff = chan_bw/n_fft; // Filterbank channel bandwidth in MHz
-      fb_hdr.nchans = n_coarse_proc*n_fft; // Number of channels in a filterbank file
-      fb_hdr.fch1 = center_freq; // Center frequency in MHz
-      fb_hdr.tsamp = tbin*n_fft*n_time_int; // Time interval between output samples
-      fb_hdr.tstart = stt_imjd + stt_smjd/86400.0; // tstart for now
-      // Write RAW filename to filterbank header
-      sprintf(raw_filename, "%s.0000.raw",  raw_basefilename);
-      strncpy(fb_hdr.rawdatafile, raw_filename, 80);
-      fb_hdr.rawdatafile[80] = '\0';
-
-      // Write filterbank header to output file
-      for(int b = 0; b < nbeams; b++){
-        fb_hdr.ibeam =  b;
-        if(sim_flag == 0){
-          fb_hdr.src_raj = ra_data[b];
-          fb_hdr.src_dej = dec_data[b];
-          strncpy(fb_hdr.source_name, (char *)src_names_str[b].p, src_names_str[b].len);
-          fb_hdr.source_name[src_names_str[b].len] = '\0';
-        }
-        fb_fd_write_header(fdraw[b], &fb_hdr);
-      }
+    if(sim_flag == 0){
+      output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, bf_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft, telescope_flag);
+    }else if(sim_flag == 1){
+      output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, tmp_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft, telescope_flag);
     }
 
-    // If we got packet 0, process and write data to disk
-    if (got_packet_0) {
+    // Set beamformer output (CUDA kernel before conversion to power), that is summing, to zero before moving on to next block
+    //set_to_zero_ubf();
 
-      // Note writing status
-      hashpipe_status_lock_safe(st);
-      hputs(st->buf, status_key, "writing");
-      hashpipe_status_unlock_safe(st);
+    // Stop timing beamforming computation
+    clock_gettime(CLOCK_MONOTONIC, &tval_after);
+    time_taken = (float)(tval_after.tv_sec - tval_before.tv_sec); //*1e6; // Time in seconds since epoch
+    time_taken = time_taken + (float)(tval_after.tv_nsec - tval_before.tv_nsec)*1e-9; // Time in nanoseconds since 'tv_sec - start and end'
+    bf_time = time_taken;
 
-      // Start timing beamforming computation
-      struct timespec tval_before, tval_after;
-      clock_gettime(CLOCK_MONOTONIC, &tval_before);
+    printf("UBF: Subband index: %d, run_beamformer() time: %f s\n", subband_idx, bf_time);
 
-      if(sim_flag == 0){
-        output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, bf_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft, telescope_flag);
-      }else if(sim_flag == 1){
-        output_data = run_upchannelizer_beamformer((signed char *)&db->block[curblock].data, tmp_coefficients, (int)npol, (int)nants, (int)nbeams, (int)n_coarse_proc, n_win, n_time_int, n_fft, telescope_flag);
+    // Start timing write
+    struct timespec tval_before_w, tval_after_w;
+    clock_gettime(CLOCK_MONOTONIC, &tval_before_w);
+
+    for(int b = 0; b < nbeams; b++){
+      rv = write(fdraw[b], &output_data[b*n_coarse_proc*n_fft*n_sti], (size_t)blocksize);
+      if(rv != blocksize){
+        char msg[100];
+        perror(thread_name);
+        sprintf(msg, "Error writing data (output_data=%p, blocksize=%d, rv=%d)", output_data, blocksize, rv);
+        hashpipe_error(thread_name, msg);
       }
 
-      // Set beamformer output (CUDA kernel before conversion to power), that is summing, to zero before moving on to next block
-      //set_to_zero_ubf();
-
-      // Stop timing beamforming computation
-      clock_gettime(CLOCK_MONOTONIC, &tval_after);
-      time_taken = (float)(tval_after.tv_sec - tval_before.tv_sec); //*1e6; // Time in seconds since epoch
-      time_taken = time_taken + (float)(tval_after.tv_nsec - tval_before.tv_nsec)*1e-9; // Time in nanoseconds since 'tv_sec - start and end'
-      bf_time = time_taken;
-
-      printf("UBF: Subband index: %d, run_beamformer() time: %f s\n", subband_idx, bf_time);
-
-      // Start timing write
-      struct timespec tval_before_w, tval_after_w;
-      clock_gettime(CLOCK_MONOTONIC, &tval_before_w);
-
-      for(int b = 0; b < nbeams; b++){
-        rv = write(fdraw[b], &output_data[b*n_coarse_proc*n_fft*n_sti], (size_t)blocksize);
-        if(rv != blocksize){
-          char msg[100];
-          perror(thread_name);
-          sprintf(msg, "Error writing data (output_data=%p, blocksize=%d, rv=%d)", output_data, blocksize, rv);
-          hashpipe_error(thread_name, msg);
-        }
-
-        // flush output
-        fsync(fdraw[b]);
-      }
-      // Stop timing write
-      clock_gettime(CLOCK_MONOTONIC, &tval_after_w);
-      time_taken_w = (float)(tval_after_w.tv_sec - tval_before_w.tv_sec); //*1e6; // Time in seconds since epoch
-      time_taken_w = time_taken_w + (float)(tval_after_w.tv_nsec - tval_before_w.tv_nsec)*1e-9; // Time in nanoseconds since 'tv_sec - start and end'
-      write_time = time_taken_w;
-      printf("UBF: Time taken to write block of size, %d bytes, to disk = %f s \n", (int)nbeams*blocksize, write_time);
+      // flush output
+      fsync(fdraw[b]);
+    }
+    // Stop timing write
+    clock_gettime(CLOCK_MONOTONIC, &tval_after_w);
+    time_taken_w = (float)(tval_after_w.tv_sec - tval_before_w.tv_sec); //*1e6; // Time in seconds since epoch
+    time_taken_w = time_taken_w + (float)(tval_after_w.tv_nsec - tval_before_w.tv_nsec)*1e-9; // Time in nanoseconds since 'tv_sec - start and end'
+    write_time = time_taken_w;
+    printf("UBF: Time taken to write block of size, %d bytes, to disk = %f s \n", (int)nbeams*blocksize, write_time);
       
-      printf("UBF: After write() function! Block index = %d \n", block_count);
+    printf("UBF: After write() function! Block index = %d \n", block_count);
 
-      // Increment counter
-      block_count++;
-    }
+    // Increment counter
+    block_count++;
 
     // Mark as free
     hpguppi_input_databuf_set_free(db, curblock);

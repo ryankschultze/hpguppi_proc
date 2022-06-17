@@ -208,27 +208,6 @@ static void *run(hashpipe_thread_args_t * args)
         hputs(st.buf, status_key, "waiting");
         hputi4(st.buf, "NETBKOUT", block_idx);
         hashpipe_status_unlock_safe(&st);
-        // -------------------------------------------------------------- //
-        // Wait for data
-        // Wait for new block to be free, then clear it
-        // if necessary and fill its header with new values.
-        // -------------------------------------------------------------- //
-#if VERBOSE
-	printf("STRIDE INPUT: while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) \n");
-#endif
-        while ((rv=hpguppi_input_databuf_wait_free(db, block_idx))
-                != HASHPIPE_OK) {
-            if (rv==HASHPIPE_TIMEOUT) {
-                hashpipe_status_lock_safe(&st);
-                hputs(st.buf, status_key, "blocked");
-                hashpipe_status_unlock_safe(&st);
-                continue;
-            } else {
-            hashpipe_error(__FUNCTION__, "error waiting for free databuf");
-                pthread_exit(NULL);
-                break;
-            }
-        }
 
 #if VERBOSE
 	printf("STRIDE INPUT: Before file open if{} \n");
@@ -253,6 +232,29 @@ static void *run(hashpipe_thread_args_t * args)
             // Iterate through blocks until the end of a sequence of RAW files
             // -------------------------------------------------------------- //
             while(!end_of_scan){
+
+                // -------------------------------------------------------------- //
+                // Wait for data
+                // Wait for new block to be free, then clear it
+                // if necessary and fill its header with new values.
+                // -------------------------------------------------------------- //
+#if VERBOSE
+	        printf("STRIDE INPUT: while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) \n");
+#endif
+                while ((rv=hpguppi_input_databuf_wait_free(db, block_idx))
+                        != HASHPIPE_OK) {
+                    if (rv==HASHPIPE_TIMEOUT) {
+                        hashpipe_status_lock_safe(&st);
+                        hputs(st.buf, status_key, "blocked");
+                        hashpipe_status_unlock_safe(&st);
+                        continue;
+                    } else {
+                        hashpipe_error(__FUNCTION__, "error waiting for free databuf");
+                        pthread_exit(NULL);
+                        break;
+                    }
+                }
+
                 // Check keyword in status memory to see whether bfr5 file exists
                 // If it doesn't exist, set fdin equal to -1 and wait for new RAW file name (new scan)
                 hgeti4(st.buf, "BFR5FID", &bfr5fid);
