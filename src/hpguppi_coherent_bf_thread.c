@@ -380,10 +380,10 @@ static void *run(hashpipe_thread_args_t * args)
 
       // Skip zeroth index since the number of coarse channels is even and the center frequency is between the 2 middle channels
       for(int i=0; i<n_chan_per_node; i++){
-        //coarse_chan_freq[i] = (i-((n_chan_per_node-1)/2))*coarse_chan_band + (obsfreq*1e6);
-        coarse_chan_freq[i] = (i-((n_chan_per_node-1)/2))*(chan_bw*1e-3) + (obsfreq*1e-3);
+        //coarse_chan_freq[i] = (i-(((double)n_chan_per_node-1)/2))*coarse_chan_band + (obsfreq*1e6);
+        coarse_chan_freq[i] = (i-(((double)n_chan_per_node-1)/2))*(chan_bw*1e-3) + (obsfreq*1e-3);
         // Equivalent equation //
-        //coarse_chan_freq[i] = (i-(n_chan_per_node/2))*(chan_bw*1e6) + (obsfreq*1e6) + ((chan_bw/2)*1e6);
+        //coarse_chan_freq[i] = (i-((double)n_chan_per_node/2))*(chan_bw*1e6) + (obsfreq*1e6) + ((chan_bw/2)*1e6);
       }
 
       printf("CBF: coarse_chan_freq[%d] = %lf GHz \n", 0, coarse_chan_freq[0]);
