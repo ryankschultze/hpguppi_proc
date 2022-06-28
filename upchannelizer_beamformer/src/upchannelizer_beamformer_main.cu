@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
 	if(strcmp(argv[1], "-h") == 0){
 		printf("To execute this program enter the following command:\n");
-		printf("    ./upchannelizer_beamformer_main.exe <output file> <simulated data flag> <simulated coefficients flag> <telescope flag> <mode flag or VLASS specifications depending on telescope flag>\n");
+		printf("    ./upchannelizer_beamformer_main <output file> <simulated data flag> <simulated coefficients flag> <telescope flag> <mode flag or VLASS specifications depending on telescope flag>\n");
 		printf("    <> are not used in the command, but are just used to indicate arguments in this description\n");
 		printf("Descriptions of the arguments in the command above:\n");
 		printf("    <output file> - Enter the binary file along with it's path e.g. /datag/users/mruzinda/o/output_d_fft_bf.bin \n");
@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
 	// To run in subarray configuration, enter values 32 or less (and greater than 1 otherwise, beamforming can't be done)
 	// ---------------------------- //
 	int n_beam = 0;
-        int n_pol = 0;
+    int n_pol = 0;
 	int n_sim_ant = 0;
 	int n_ant_config = 0;
 	int n_chan = 0;
