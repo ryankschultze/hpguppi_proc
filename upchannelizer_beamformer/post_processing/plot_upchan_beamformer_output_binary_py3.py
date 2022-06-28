@@ -18,32 +18,38 @@ contents_float = np.fromfile(filename, dtype=np.float32)
 
 print(len(contents_float))
 print(contents_float[0])
-print(sys.argv[2])
+print(sys.argv[4])
 
 telescope_flag = sys.argv[2]
 mode_flag = sys.argv[3]
 # Array dimensions
 # MeerKAT specs
 if telescope_flag == "MK":
-    N_beam = 61 # 64
-    N_time = 1 # STI windows
-    # 1k mode
-    if mode_flag == "1k":
-        N_coarse = 1
-        N_fine = (4096*1024)/8 # N_coarse*2^19
-    # 4k mode
-    if mode_flag == "4k":
-        N_coarse = 4 # 4
-        N_fine = (1024*1024)/8 # N_coarse*2^17 
-    # 32k mode
-    if mode_flag == "32k":
-        N_coarse = 32
-        N_fine = (128*1024)/8 # N_coarse*2^14
+    if num_args < 5:
+        N_beam = 61
+        N_time = 1
+    else:
+        if num_args == 5:
+            N_beam = int(sys.argv[4]) # 64
+            N_time = 1 # STI windows
+        elif num_args == 6:
+            N_beam = int(sys.argv[4]) # 64
+            N_time = int(sys.argv[5]) # STI windows
+        # 1k mode
+        if mode_flag == "1k":
+            N_coarse = 1
+            N_fine = (4096*1024)/8 # N_coarse*2^19
+        # 4k mode
+        if mode_flag == "4k":
+            N_coarse = 4 # 4
+            N_fine = (1024*1024)/8 # N_coarse*2^17 
+        # 32k mode
+        if mode_flag == "32k":
+            N_coarse = 32
+            N_fine = (128*1024)/8 # N_coarse*2^14
+    
 
 # VLASS specs
-# Number of points of the FFT
-if num_args == 5:
-    fft_flag = sys.argv[4]
 if telescope_flag == "VLA":
     N_coarse = 1
     # Required
@@ -53,16 +59,27 @@ if telescope_flag == "VLA":
         N_beam = 5 # 64
     # Desired
     if mode_flag == "des":
-        N_beam = 31 # 64
-        if fft_flag == "5120000":
-            N_time = 2 # STI windows
-            N_fine = 5120000
-        if fft_flag == "128000":
-            N_time = 80 # STI windows
-            N_fine = 128000
-        if fft_flag == "1024":
+        if num_args == 4: # Default parameters
+            N_beam = 31 # 64
             N_time = 10000 # STI windows
             N_fine = 1024
+        elif num_args == 5: # If only number of beams are specified
+            N_beam = int(sys.argv[4]) # 64
+            N_time = 10000 # STI windows
+            N_fine = 1024
+        # Number of points of the FFT
+        elif num_args == 6: # If number of beams and FFT length are specified
+            N_beam = int(sys.argv[4]) # 64
+            fft_flag = int(sys.argv[5])
+            if fft_flag == "5120000":
+                N_time = 2 # STI windows
+                N_fine = 5120000
+            if fft_flag == "128000":
+                N_time = 80 # STI windows
+                N_fine = 128000
+            if fft_flag == "1024":
+                N_time = 10000 # STI windows
+                N_fine = 1024
 
 N_elements = int(N_time*N_coarse*N_fine*N_beam)
 

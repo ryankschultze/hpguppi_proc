@@ -33,12 +33,15 @@ float* data_test(signed char *sim_data){
 }
 
 int main(int argc, char **argv) {
-	if((argc > 6) || (argc < 2)) {
-		printf("The minimum requirement is to set the output file as the first argument. Enter -h option for help. \n");
+	if((argc > 9) || (argc < 2)) {
+		printf("The minimum requirement is to set the output file as the first argument. Enter -h or --help option for information on how to run this program. \n");
 		return -1;
 	}
+	if(argc > 6){
+		printf("Number of beams, polarizations and/or antennas have been chosen.\n");
+	}
 
-	if(strcmp(argv[1], "-h") == 0){
+	if((strcmp(argv[1], "-h") == 0) || (strcmp(argv[1], "--help") == 0)){
 		printf("To execute this program enter the following command:\n");
 		printf("    ./upchannelizer_beamformer_main <output file> <simulated data flag> <simulated coefficients flag> <telescope flag> <mode flag or VLASS specifications depending on telescope flag>\n");
 		printf("    <> are not used in the command, but are just used to indicate arguments in this description\n");
@@ -66,6 +69,13 @@ int main(int argc, char **argv) {
 		printf("    If VLA is specified, the next argument should be input as:\n");
 		printf("        required -> Required specifications \n");
 		printf("        desired  -> Desired specifications \n");
+                printf("An example with a specified output file, simulated data flag of <5>, coefficient flag of <4>, telescope flag <MK>, and mode of <4k> is shown below:\n");
+                printf("    ./upchannelizer_beamformer_main /datag/users/mruzinda/o/output_d_fft_bf.bin 5 4 MK 4k\n");
+		printf("If the number beams, polarizations and/or antennas are to be chosen, the following command can be used:\n");
+		printf("    ./upchannelizer_beamformer_main <output file> <simulated data flag> <simulated coefficients flag> <telescope flag> <mode flag or VLASS specifications depending on telescope flag> <number of beams> <number of polarizations> <number of antennas>\n");
+		printf("There are limitations to the values of these 3 additional paramters. The max number of polarizations is 2 in any case. \n");
+		printf("When the telescope is MK, the max number of beams is 64 and antennas is 64. \n");
+		printf("When the telescope is VLA, the max number of beams is 32 and antennas is 32. \n");
 
 		return 0;
 	}
@@ -151,7 +161,7 @@ int main(int argc, char **argv) {
 	// To run in subarray configuration, enter values 32 or less (and greater than 1 otherwise, beamforming can't be done)
 	// ---------------------------- //
 	int n_beam = 0;
-    int n_pol = 0;
+	int n_pol = 0;
 	int n_sim_ant = 0;
 	int n_ant_config = 0;
 	int n_chan = 0;
@@ -163,9 +173,26 @@ int main(int argc, char **argv) {
         // ---------------- MeerKAT specs --------------- //
 	if(telescope_flag == 0){
 		n_input = N_INPUT;
-		n_beam = 61;
-		n_pol = 2;
-		n_sim_ant = 58;
+		if(argc > 6){ // If parameters are specified
+			if(argc == 7){
+				n_beam = atoi(argv[6]);
+				n_pol = 2;
+				n_sim_ant = 58;
+			}else if(argc == 8){
+				n_beam = atoi(argv[6]);
+				n_pol = atoi(argv[7]);
+				n_sim_ant = 58;
+			}else if(argc == 9){
+				n_beam = atoi(argv[6]);
+				n_pol = atoi(argv[7]);
+				n_sim_ant = atoi(argv[8]);
+			}
+		}else{ // Default parameters
+			printf("Default parameters used! \n");
+			n_beam = 61;
+			n_pol = 2;
+			n_sim_ant = 58;
+		}
 		if(n_sim_ant <= N_ANT/2){ // Subarray configuration
 			n_ant_config = N_ANT/2;
 			// 5 seconds worth of processing at a time
@@ -211,6 +238,7 @@ int main(int argc, char **argv) {
 		n_input = VLASS_N_INPUT;
                 // Required Specification
 		if(spec_flag == 0){
+			printf("Required mode chosen. Specifications remain unchanged from default. \n");
 			n_beam = 5;
 			n_pol = 2;
 			n_sim_ant = 27;
@@ -221,9 +249,26 @@ int main(int argc, char **argv) {
 			n_time_int = 1;
 		}// Desired Specification
 		else if(spec_flag == 1){
-			n_beam = 31;
-			n_pol = 2;
-			n_sim_ant = 27;
+			if(argc > 6){ // If parameters are specified
+				if(argc == 7){
+					n_beam = atoi(argv[6]);
+					n_pol = 2;
+					n_sim_ant = 27;
+				}else if(argc == 8){
+					n_beam = atoi(argv[6]);
+					n_pol = atoi(argv[7]);
+					n_sim_ant = 27;
+				}else if(argc == 9){
+					n_beam = atoi(argv[6]);
+					n_pol = atoi(argv[7]);
+					n_sim_ant = atoi(argv[8]);
+				}
+			}else{ // Default parameters
+				printf("Default parameters used! \n");
+				n_beam = 31;
+				n_pol = 2;
+				n_sim_ant = 27;
+			}
 			n_ant_config = N_ANT/2;
 			n_chan = 1;
 			nt = 10240000; // 5120000
