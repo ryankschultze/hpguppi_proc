@@ -3,29 +3,83 @@
 import matplotlib.pyplot as plt
 from array import array
 import numpy as np
+import sys
+
+# Number of arguments
+num_args = len(sys.argv)
 
 # Open binary file containing beamformer output
+filename = sys.argv[1]
 #filename = "/datag/users/mruzinda/o/output_d_fft_bf.bin"
-filename = "/home/mruzinda/tmp_output/output_d_fft_bf.bin"
+#filename = "/home/mruzinda/tmp_output/output_d_fft_bf.bin"
 
 # Read file contents: np.fromfile(filename, dtype=float, count=- 1, sep='', offset=0)
 contents_float = np.fromfile(filename, dtype=np.float32)
 
 print(len(contents_float))
 print(contents_float[0])
+print(sys.argv[4])
 
+telescope_flag = sys.argv[2]
+mode_flag = sys.argv[3]
 # Array dimensions
-N_beam = 61 # 64
-N_time = 1 # STI windows
-# 1k mode
-#N_coarse = 1
-#N_fine = (4096*1024)/8 # N_coarse*2^19
-# 4k mode
-N_coarse = 4 # 4
-N_fine = (1024*1024)/8 # N_coarse*2^17 
-# 32k mode
-#N_coarse = 32
-#N_fine = (128*1024)/8 # N_coarse*2^14
+# MeerKAT specs
+if telescope_flag == "MK":
+    if num_args < 5:
+        N_beam = 61
+        N_time = 1
+    else:
+        if num_args == 5:
+            N_beam = int(sys.argv[4]) # 64
+            N_time = 1 # STI windows
+        elif num_args == 6:
+            N_beam = int(sys.argv[4]) # 64
+            N_time = int(sys.argv[5]) # STI windows
+        # 1k mode
+        if mode_flag == "1k":
+            N_coarse = 1
+            N_fine = (4096*1024)/8 # N_coarse*2^19
+        # 4k mode
+        if mode_flag == "4k":
+            N_coarse = 4 # 4
+            N_fine = (1024*1024)/8 # N_coarse*2^17 
+        # 32k mode
+        if mode_flag == "32k":
+            N_coarse = 32
+            N_fine = (128*1024)/8 # N_coarse*2^14
+    
+
+# VLASS specs
+if telescope_flag == "VLA":
+    N_coarse = 1
+    # Required
+    if mode_flag == "req":
+        N_time = 40 # STI windows
+        N_fine = 128000
+        N_beam = 5 # 64
+    # Desired
+    if mode_flag == "des":
+        if num_args == 4: # Default parameters
+            N_beam = 31 # 64
+            N_time = 10000 # STI windows
+            N_fine = 1024
+        elif num_args == 5: # If only number of beams are specified
+            N_beam = int(sys.argv[4]) # 64
+            N_time = 10000 # STI windows
+            N_fine = 1024
+        # Number of points of the FFT
+        elif num_args == 6: # If number of beams and FFT length are specified
+            N_beam = int(sys.argv[4]) # 64
+            fft_flag = int(sys.argv[5])
+            if fft_flag == "5120000":
+                N_time = 2 # STI windows
+                N_fine = 5120000
+            if fft_flag == "128000":
+                N_time = 80 # STI windows
+                N_fine = 128000
+            if fft_flag == "1024":
+                N_time = 10000 # STI windows
+                N_fine = 1024
 
 N_elements = int(N_time*N_coarse*N_fine*N_beam)
 
@@ -42,7 +96,7 @@ if N_time > 1:
     # "interpolation ='none'" removes interpolation which was there by default. 
     # I'm only removing it for the sake of accurate analysis and diagnosis.
     #plt.imshow(contents_array[0:N_time,0:N_fine,beam_idx], extent=[1, N_fine, 1, N_time], aspect='auto', interpolation='bicubic')
-    plt.imshow(contents_array[beam_idx,0:N_time,0:int(N_coarse*N_fine)], extent=[1, int(N_coarse*N_fine), 1, N_time], aspect='auto', interpolation='none')
+    plt.imshow(contents_array[beam_idx,0:N_time,0:int(N_coarse*N_fine)], extent=[0, int(N_coarse*N_fine), 0, N_time], aspect='auto', interpolation='none')
     plt.title('Waterfall (Frequency vs. time)')
     plt.ylabel('Time samples')
     plt.xlabel('Frequency bins')
@@ -102,7 +156,7 @@ if N_time > 1:
     axs[0, 1].set_title('Beam 2')
     axs[1, 0].plot(contents_array[2,0:N_time,freq_idx], 'tab:green')
     axs[1, 0].set_title('Beam 3')
-    axs[1, 1].plot(contents_array[33,0:N_time,freq_idx], 'tab:red')
+    axs[1, 1].plot(contents_array[3,0:N_time,freq_idx], 'tab:red')
     axs[1, 1].set_title('Beam 33')
 
     # set the spacing between subplots

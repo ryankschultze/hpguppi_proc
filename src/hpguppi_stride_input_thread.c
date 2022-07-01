@@ -1,8 +1,8 @@
 /* hpguppi_stride_input_thread.c
  *
- * Routine to read GUPPI RAW files and put them 
- * into shared memory blocks. 
- * Can specify output dir if want it different 
+ * Routine to read GUPPI RAW files and put them
+ * into shared memory blocks.
+ * Can specify output dir if want it different
  * from input.
  * Author: Mark R. and Cherry Ng
  */
@@ -89,7 +89,7 @@ static void *run(hashpipe_thread_args_t * args)
     // -------------------------------------------------------------- //
     // Reinitialize subband index to 0
     // -------------------------------------------------------------- //
-    hputi4(st.buf, "SUBBAND", 0);
+    //hputi4(st.buf, "SUBBAND", 0);
 
     // -------------------------------------------------------------- //
     // Variables and pointers used in main loop
@@ -101,6 +101,7 @@ static void *run(hashpipe_thread_args_t * args)
     long int cur_pos = 0;
     long int payload_start = 0;
     int end_of_scan = 0; // End of file flag
+    int bfr5fid = 0;
     int blocsize;
     int nblocks = 0;
     int nants = 0;            // Number of antennas stated in RAW file
@@ -117,6 +118,7 @@ static void *run(hashpipe_thread_args_t * args)
     int64_t prev_pktidx;
     int64_t zero_blk_pktidx;
     int n_missed_blks = 0;
+    int telescope_flag = 0;
     char *zero_blk;
     zero_blk = (char*)calloc(N_INPUT, sizeof(char));
     char *ptr;
@@ -124,7 +126,7 @@ static void *run(hashpipe_thread_args_t * args)
     //Filenames and paths
     char basefilename[200];
     char fname[256];
-    
+
     hgets(st.buf, "BASEFILE", sizeof(basefilename), basefilename);
 
     char cur_fname[200] = {0};
@@ -134,7 +136,7 @@ static void *run(hashpipe_thread_args_t * args)
     char *base_pos;
     long int period_pos;
     char character = '/';
-    char *char_offset; 
+    char *char_offset;
     long int slash_pos;
     char new_base[200];
 
@@ -165,7 +167,7 @@ static void *run(hashpipe_thread_args_t * args)
         n_win = 16;
         // 5 seconds worth of processing at a time
         // 1k mode
-        //n_chan = 1; 
+        //n_chan = 1;
         //n_samp = (2*4096*1024)/n_win; // 4194304; // 2^22
         // 4k mode
         n_chan = 4; // 64
@@ -178,7 +180,7 @@ static void *run(hashpipe_thread_args_t * args)
         n_win = 8;
         // 5 seconds worth of processing at a time
         // 1k mode
-        //n_chan = 1; 
+        //n_chan = 1;
         //n_samp = (4096*1024)/n_win; // 4194304; // 2^22
         // 4k mode
         n_chan = 4; // 64
@@ -187,8 +189,9 @@ static void *run(hashpipe_thread_args_t * args)
         //n_chan = 32;
         //n_samp = (128*1024)/n_win; // 131072; // 2^17
       }
-      n_pol = 2; 
-      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win); // Generate block of simulated data
+      int sim_flag = 5;
+      n_pol = 2;
+      sim_data = (char *)simulate_data_ubf(n_sim_ant, n_ant_config, n_pol, n_chan, n_samp, n_win, sim_flag, telescope_flag); // Generate block of simulated data
     }
     ssize_t read_blocsize;
 #if TIMING
@@ -205,34 +208,13 @@ static void *run(hashpipe_thread_args_t * args)
         hputs(st.buf, status_key, "waiting");
         hputi4(st.buf, "NETBKOUT", block_idx);
         hashpipe_status_unlock_safe(&st);
-        // -------------------------------------------------------------- //
-        // Wait for data
-        // Wait for new block to be free, then clear it
-        // if necessary and fill its header with new values.
-        // -------------------------------------------------------------- //
-#if VERBOSE
-	printf("STRIDE INPUT: while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) \n");
-#endif
-        while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) 
-                != HASHPIPE_OK) {
-            if (rv==HASHPIPE_TIMEOUT) {
-                hashpipe_status_lock_safe(&st);
-                hputs(st.buf, status_key, "blocked");
-                hashpipe_status_unlock_safe(&st);
-                continue;
-            } else {
-            hashpipe_error(__FUNCTION__, "error waiting for free databuf");
-                pthread_exit(NULL);
-                break;
-            }
-        }
 
 #if VERBOSE
 	printf("STRIDE INPUT: Before file open if{} \n");
 #endif
 
         // -------------------------------------------------------------- //
-        // Stride through RAW file to get all time samples for specific 
+        // Stride through RAW file to get all time samples for specific
         // subband in the RAW file and place in buffer accordingly
         // -------------------------------------------------------------- //
         for(int s = 0; s<n_subband; s++){ // Shift to next subband of 16
@@ -250,10 +232,40 @@ static void *run(hashpipe_thread_args_t * args)
             // Iterate through blocks until the end of a sequence of RAW files
             // -------------------------------------------------------------- //
             while(!end_of_scan){
+
+                // -------------------------------------------------------------- //
+                // Wait for data
+                // Wait for new block to be free, then clear it
+                // if necessary and fill its header with new values.
+                // -------------------------------------------------------------- //
+#if VERBOSE
+	        printf("STRIDE INPUT: while ((rv=hpguppi_input_databuf_wait_free(db, block_idx)) \n");
+#endif
+                while ((rv=hpguppi_input_databuf_wait_free(db, block_idx))
+                        != HASHPIPE_OK) {
+                    if (rv==HASHPIPE_TIMEOUT) {
+                        hashpipe_status_lock_safe(&st);
+                        hputs(st.buf, status_key, "blocked");
+                        hashpipe_status_unlock_safe(&st);
+                        continue;
+                    } else {
+                        hashpipe_error(__FUNCTION__, "error waiting for free databuf");
+                        pthread_exit(NULL);
+                        break;
+                    }
+                }
+
+                // Check keyword in status memory to see whether bfr5 file exists
+                // If it doesn't exist, set fdin equal to -1 and wait for new RAW file name (new scan)
+                hgeti4(st.buf, "BFR5FID", &bfr5fid);
+
                 // -------------------------------------------------------------- //
                 // Read raw files
                 // -------------------------------------------------------------- //
-                if (fdin == -1) { //no file opened
+                if ((fdin == -1) || (bfr5fid == -1)) { //no file opened
+                    // Ensure the block_count and subband index are reinitialized if a scan has been skipped
+                    block_count = 0;
+                    s = 0;
                     // If there is no file ready at the beginning of processing then wait for it to be written to the buffer.
                     while(strlen(cur_fname) == 0){
                         hashpipe_status_lock_safe(&st);
@@ -281,12 +293,21 @@ static void *run(hashpipe_thread_args_t * args)
                     // Now create the basefilename
                     // If a '...0000.raw' file exists, that is different from the previous '...0000.raw' file
                     if (strcmp(prev_fname, cur_fname) != 0){
+                        // If a new scan has started as a result of skipping due to a missing bfr5 file,
+                        // reset the keyword in shared memory so the process can start over for the new scan
+                        bfr5fid = 0;
+                        hashpipe_status_lock_safe(&st);
+                        hputi4(st.buf, "BFR5FID", bfr5fid);
+                        hashpipe_status_unlock_safe(&st);
+
+                        printf("STRIDE INPUT: RAW file name is currently: %s \n", cur_fname); // Let the user know the current RAW file name
                         strcpy(prev_fname, cur_fname); // Save this file name for comparison on the next iteration
 
                         base_pos = strchr(cur_fname, '.'); // Finds the first occurence of a period in the filename
                         period_pos = base_pos-cur_fname;
 
                         memcpy(basefilename, cur_fname, period_pos); // Copy base filename portion of file name to tmp_basefilename variable
+                        basefilename[period_pos] = '\0';
 
                         // Get basefilename with no path and place in status buffer
                         // strrchr() finds the last occurence of the specified character
@@ -314,6 +335,24 @@ static void *run(hashpipe_thread_args_t * args)
                             printf("STRIDE INPUT: Waiting for new RAW file name! \n");
                         }
 
+                        // Get RAW file name in the status buffer
+                        hashpipe_status_lock_safe(&st);
+                        hgets(st.buf, "RAWFILE", sizeof(cur_fname), cur_fname);
+                        hashpipe_status_unlock_safe(&st);
+
+                        // Assume the input directory may have changed
+                        hashpipe_status_lock_safe(&st);
+                        hgets(st.buf, "INPUTDIR", sizeof(indir), indir); // Don't have a name for this keyword yet, just going with 'INPUTDIR' for now
+                        hashpipe_status_unlock_safe(&st);
+                        // Ensure there's a slash at the end of the path
+                        if((strlen(indir) != 0) && (indir[(strlen(indir)-1)] != '/')){
+                            strcat(indir, "/");
+                        }
+                        if(strlen(indir) != 0){
+                            strcat(indir, cur_fname); // Concatenate the directory and filename
+                            strcpy(cur_fname, indir); // Use cur_fname as the current file name variable moving forward
+                        }
+
                         // Will exit if thread has been cancelled
                         pthread_testcancel();
 
@@ -321,7 +360,7 @@ static void *run(hashpipe_thread_args_t * args)
                     }
                     wait_filename = 0; // Print "waiting for new RAW file name" only once
                     sprintf(fname, "%s.%04d.raw", basefilename, filenum);
-            
+
                     printf("STRIDE INPUT: Opening first raw file '%s'\n", fname);
                     fdin = open(fname, open_flags, 0644);
                     if (fdin==-1) {
@@ -364,8 +403,8 @@ static void *run(hashpipe_thread_args_t * args)
                 printf("STRIDE INPUT: current position = %ld, raw_file_size = %ld and headersize = %d \n", cur_pos, raw_file_size, headersize);
 
                 // -------------------------------------------------------------- //
-                // If we are not at the end of the file, read blocks and transfer 
-                // to shared mem buffer else if we are at the end, move on to the 
+                // If we are not at the end of the file, read blocks and transfer
+                // to shared mem buffer else if we are at the end, move on to the
                 // next file
                 // -------------------------------------------------------------- //
                 if(((raw_file_size-cur_pos)>=(blocsize+headersize))){
@@ -397,6 +436,8 @@ static void *run(hashpipe_thread_args_t * args)
                         hputs(st.buf, status_key, "receiving");
                         memcpy(header, &header_buf, headersize);
                         hashpipe_status_unlock_safe(&st);
+
+                        hputi4(header, "SUBBAND", s);
 
                         directio = hpguppi_read_directio_mode(header);
 
@@ -443,8 +484,8 @@ static void *run(hashpipe_thread_args_t * args)
                         // If current packet index is greater than packet start,
                         // check to see whether there are missed blocks
                         if(cur_pktidx > pktstart){
-                            // At the beginning of a RAW file, prev_pktidx is set to 0 
-                            // in order to verify whether there are missing blocks at 
+                            // At the beginning of a RAW file, prev_pktidx is set to 0
+                            // in order to verify whether there are missing blocks at
                             // the beginning of the file
                             if(prev_pktidx == 0){
                                 prev_pktidx = pktstart;
@@ -546,7 +587,7 @@ static void *run(hashpipe_thread_args_t * args)
 
                         // Copy block of zeros to block in buffer
                         memcpy(&ptr[block_count*Niq*npol*n_coarse_proc*nants*n_samp_per_block], zero_blk, Niq*npol*n_coarse_proc*nants*n_samp_per_block);
-            
+
                         // Decrement n_missed_blks by 1
                         n_missed_blks -= 1;
 
@@ -602,50 +643,44 @@ static void *run(hashpipe_thread_args_t * args)
                     if(fdin != -1){
                         // Get raw file size in order to calculate the number of blocks in the file
                         raw_file_size = get_file_size(fdin);
-                    }
-                    printf("STRIDE INPUT: fdin = %d, n_samp = %d and raw_file_size = %ld \n", fdin, block_count*n_samp_per_block, raw_file_size);
-                    if ((fdin==-1) && (s < (n_subband-1))) { // End of a sequence of RAW files corresponding to a scan and less than the no. of subbands
+                        printf("STRIDE INPUT: fdin = %d, n_samp = %d and raw_file_size = %ld \n", fdin, block_count*n_samp_per_block, raw_file_size);
+                    } else {
+                        // End of scan for sub-band s
+
                         // Start the next scan with file number 0
                         filenum=0;
-
-                        sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
-                        printf("STRIDE INPUT: Opening first raw file '%s' of scan for subband = %d of %d \n", fname, s, n_subband);
-                        fdin = open(fname, open_flags, 0644);
-
-                        // Get raw file size in order to calculate the number of blocks in the file
-                        raw_file_size = get_file_size(fdin);
-
-                        // Reset previous pktidx to 0 for the next scan
-                        prev_pktidx = 0;
-
-                        // End of scan so move on to the next subband
-                        end_of_scan = 1;
-                    }else if ((fdin==-1) && (s == (n_subband-1))) { // End of a sequence of RAW files corresponding to a scan and end of subbands
-                        // Start the next scan with file number 0
-                        filenum=0;
-
-                        printf("STRIDE INPUT: cur_pktidx = %ld and pktstop = %ld \n", cur_pktidx, pktstop);
 
                         // Inform the downstream thread that we have reached the end of a scan
-                        if(cur_pktidx < pktstop){
-                            hgeti8(header_buf, "PKTIDX", &cur_pktidx);
+                        hgeti8(header_buf, "PKTIDX", &cur_pktidx); // Needed???
 
-                            // Create a header for a dummy block
-                            header = hpguppi_databuf_header(db, block_idx);
-                            hashpipe_status_lock_safe(&st);
-                            hputs(st.buf, status_key, "receiving");
-                            memcpy(header, &header_buf, headersize);
-                            hashpipe_status_unlock_safe(&st);
+                        // Create a header for a dummy block
+                        header = hpguppi_databuf_header(db, block_idx);
+                        memcpy(header, &header_buf, headersize);
 
-                            // Send dummy block with PKTIDX set to PKTSTOP (Make sure that PKTIDX is set to PKTSTOP)
-                            hputi8(header, "PKTIDX", pktstop);
+                        // Send dummy block with PKTIDX set to PKTSTOP (Make sure that PKTIDX is set to PKTSTOP)
+                        hputi8(header, "PKTIDX", pktstop);
 
-                            // Initialize block
-                            ptr = hpguppi_databuf_data(db, block_idx);
+#if 1 // Needed?
+                        // Initialize block
+                        ptr = hpguppi_databuf_data(db, block_idx);
 
-                            // Copy block of zeros to block in buffer
-                            memcpy(ptr, zero_blk, N_INPUT);
-                            printf("STRIDE INPUT: After memcpy() N_INPUT = %ld \n", N_INPUT);
+                        // Copy block of zeros to block in buffer
+                        memcpy(ptr, zero_blk, N_INPUT);
+                        printf("STRIDE INPUT: After memcpy() N_INPUT = %ld \n", N_INPUT);
+#endif
+
+                        // Go to next sub-band or done with all sub-bands?
+                        if(s < n_subband-1) {
+                            // Start of scan for subband s+1
+                            sprintf(fname, "%s.%4.4d.raw", basefilename, filenum);
+                            printf("STRIDE INPUT: Opening first raw file '%s' of scan for subband = %d of %d \n", fname, (s+1), n_subband);
+                            fdin = open(fname, open_flags, 0644);
+
+                            // Get raw file size in order to calculate the number of blocks in the file
+                            raw_file_size = get_file_size(fdin);
+                        } else {
+                            // End of scan for all sub-bands
+                            printf("STRIDE INPUT: cur_pktidx = %ld and pktstop = %ld \n", cur_pktidx, pktstop);
                         }
 
                         // Reset previous pktidx to 0 for the next scan
@@ -654,6 +689,7 @@ static void *run(hashpipe_thread_args_t * args)
                         // End of scan so move on to the next subband
                         end_of_scan = 1;
                     }
+
                     // Reset block_count to 0 (the index of blocks in the RAW files of a subband)
                     block_count=0;
 
@@ -663,6 +699,11 @@ static void *run(hashpipe_thread_args_t * args)
 
                     // Setup for next block
                     block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
+
+#ifdef DO_SLEEP
+                    // Wait to allow the processing thread to open and read bfr5 file, and open and write to filterbank files
+                    sleep(2);
+#endif
                 }// Sometimes there might be headers with no data blocks remaining in the RAW file. So copy zero blocks to buffer blocks with the appropriate header
                 else if((cur_pos+(blocsize+headersize)) > raw_file_size){
                     // If we haven't reached the last header, then increment block_count (the index of blocks in the RAW files of a subband)
@@ -812,6 +853,10 @@ static void *run(hashpipe_thread_args_t * args)
                     // Setup for next block
                     block_idx = (block_idx + 1) % N_INPUT_BLOCKS;
 
+#ifdef DO_SLEEP
+                    // Wait to allow the beamformer to open and read bfr5 file, and open and write to filterbank files
+                    sleep(2);
+#endif
                 }
                 // Will exit if thread has been cancelled
                 pthread_testcancel();
